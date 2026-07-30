@@ -37,9 +37,12 @@ jobs:
         with:
           python-version: '3.12'
 
-      # No cache: there is no lockfile to key it on, so an enabled cache would
-      # never invalidate and would eventually serve stale tool versions.
+      # Cache off explicitly — the default is "auto", which switches it on. There
+      # is no lockfile to key it on, so the cache would never invalidate and
+      # would eventually serve stale tool versions.
       - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
 
       # uv tool install puts each CLI in its own environment on PATH, which is
       # how the repo tells contributors to install them. Keeping CI on the same
