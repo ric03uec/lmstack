@@ -39,8 +39,14 @@ without the conversation.
 The install binds this repository's absolute path into the skill, so moving or
 renaming the clone means re-running it.
 
-The last step — pointing your editor at the new endpoint — is still being built;
-see [Status](#status).
+Once a host is up, point your editor at it:
+
+```bash
+make pi-install          # merges into ~/.pi/agent, keeping what is already there
+```
+
+See [pi-config/README.md](pi-config/README.md) for the Claude Code and opencode
+bridges.
 
 ## What runs where
 
@@ -95,7 +101,7 @@ matrix.
 - [x] Phase 1 — `h1-nvidia` playbooks
 - [x] Phase 2 — `h2-amd` playbooks
 - [x] Phase 3 — the skill
-- [ ] Phase 4 — `pi-config` and agent bridges
+- [x] Phase 4 — `pi-config` and agent bridges
 - [ ] Phase 5 — documentation site
 - [ ] Phase 6 — host template and CI
 

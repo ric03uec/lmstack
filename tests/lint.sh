@@ -82,7 +82,11 @@ fi
 # virtualenvs, which silently swallowed every host's env directory — templates
 # and all. The inverse mistake is worse, so both directions are checked.
 section "secret hygiene"
-mapfile -t env_examples < <(find hosts -path '*/env/*.env.example' 2>/dev/null | sort)
+mapfile -t env_examples < <(
+  { find hosts -path '*/env/*.env.example' 2>/dev/null
+    find pi-config -name '.env.example' 2>/dev/null
+  } | sort
+)
 
 if [[ ${#env_examples[@]} -eq 0 ]]; then
   ok "no env templates yet"

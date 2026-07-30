@@ -1,0 +1,8 @@
+{
+  "name": "lmstack-pi-extensions",
+  "private": true,
+  "description": "npm-published pi extensions lmstack installs. Deliberately short: every entry is a dependency a user of this repo inherits, so it has to earn its place.",
+  "dependencies": {
+    "@narumitw/pi-statusline": "^0.38.0"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "lmstack-h2": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "lmstack h2-amd (llama.cpp)",
+      "options": {
+        "baseURL": "http://127.0.0.1:4000/v1",
+        "apiKey": "{env:LMSTACK_H2_KEY}"
+      },
+      "models": {
+        "qwen2.5-coder-7b": {
+          "name": "Qwen2.5 Coder 7B (lmstack)",
+          "limit": {
+            "context": 16384,
+            "output": 4096
+          }
+        }
+      }
+    },
+    "lmstack-h1": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "lmstack h1-nvidia (vLLM)",
+      "options": {
+        "baseURL": "http://h1-nvidia:4000/v1",
+        "apiKey": "{env:LMSTACK_H1_KEY}"
+      },
+      "models": {
+        "qwen2.5-coder-7b": {
+          "name": "Qwen2.5 Coder 7B (lmstack)",
+          "limit": {
+            "context": 16384,
+            "output": 4096
+          }
+        }
+      }
+    }
+  }
+}

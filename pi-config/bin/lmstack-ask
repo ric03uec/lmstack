@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Ask an lmstack host a one-shot question and print the answer.
+#
+# This is the bridge another agent uses. Claude Code and opencode cannot point
+# their own model at an OpenAI-compatible endpoint, but they can run a command,
+# so delegating to a local model looks like this:
+#
+#   lmstack-ask "summarise what this function does" < src/thing.go
+#   lmstack-ask -P lmstack-h1 -m qwen2.5-coder-7b "write a table test for Parse"
+#
+# Defaults chosen for being called by another agent rather than by a human:
+#
+#   --no-tools    a 7B model given shell and edit tools inside someone else's
+#                 session is a liability, not a feature. Opt in with -t.
+#   --no-session  one-shot calls should not leave session files behind.
+#
+# The default model is the alias every lmstack host serves, so the same command
+# works whichever host answers. That is what alias parity is for.
+
+set -uo pipefail
+
+readonly DEFAULT_MODEL="qwen2.5-coder-7b"
+readonly ENV_FILE="${LMSTACK_PI_ENV:-$HOME/.pi/agent/extensions/.env}"
+
+die() { printf 'lmstack-ask: %s\n' "$1" >&2; exit 1; }
+
+usage() {
+  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-1}"
+}
+
+provider=""
+model="$DEFAULT_MODEL"
+with_tools=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -P|--provider) provider="${2:-}"; shift 2 ;;
+    -m|--model)    model="${2:-}";    shift 2 ;;
+    -t|--tools)    with_tools=true;   shift ;;
+    -h|--help)     usage 0 ;;
+    --)            shift; break ;;
+    -*)            die "unknown option: $1 (try --help)" ;;
+    *)             break ;;
+  esac
+done
+
+prompt="$*"
+
+# Piped input is appended rather than replacing the prompt, so the caller can
+# say what to do with the text it is piping in.
+if [[ ! -t 0 ]]; then
+  piped="$(cat)"
+  if [[ -n "$piped" ]]; then
+    prompt="${prompt:+$prompt$'\n\n'}$piped"
+  fi
+fi
+
+[[ -n "$prompt" ]] || die "nothing to ask. Pass a prompt, pipe input, or both."
+command -v pi >/dev/null 2>&1 || die "pi is not on PATH. See pi-config/README.md."
+
+# Read a setting the same way the pi extensions do, so there is one source of
+# truth for where a host lives.
+setting() {
+  local name="$1" fallback="$2" line
+  if [[ -n "${!name:-}" ]]; then printf '%s' "${!name}"; return; fi
+  if [[ -r "$ENV_FILE" ]]; then
+    line="$(grep -m1 "^[[:space:]]*$name[[:space:]]*=" "$ENV_FILE" 2>/dev/null)" || true
+    if [[ -n "$line" ]]; then
+      printf '%s' "${line#*=}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^["'\'']//; s/["'\'']$//'
+      return
+    fi
+  fi
+  printf '%s' "$fallback"
+}
+
+# Which host answers, when the caller did not say. Loopback first: on h2-amd the
+# stack is on the same machine, and that is the common case. The choice goes to
+# stderr because a silent fallback to the wrong host looks like a model that has
+# got worse for no reason.
+if [[ -z "$provider" ]]; then
+  provider="${LMSTACK_PROVIDER:-}"
+fi
+
+if [[ -z "$provider" ]] && command -v curl >/dev/null 2>&1; then
+  for candidate in lmstack-h2:LMSTACK_H2_URL:http://127.0.0.1:4000/v1 \
+                   lmstack-h1:LMSTACK_H1_URL:http://h1-nvidia:4000/v1; do
+    name="${candidate%%:*}"
+    rest="${candidate#*:}"
+    var="${rest%%:*}"
+    default="${rest#*:}"
+    base="$(setting "$var" "$default")"
+    if curl -fsS --max-time 2 "${base%/v1}/health/liveliness" >/dev/null 2>&1; then
+      provider="$name"
+      printf 'lmstack-ask: using %s (%s)\n' "$provider" "$base" >&2
+      break
+    fi
+  done
+fi
+
+if [[ -z "$provider" ]]; then
+  die "no lmstack host answered. Start one (make up HOST=...), or name a provider with -P."
+fi
+
+args=(--print --no-session --provider "$provider" --model "$model")
+$with_tools || args+=(--no-tools)
+
+# No `--` separator: pi rejects it as an unknown option. A prompt whose first
+# character is a dash will be read as a flag; put such a prompt on stdin.
+exec pi "${args[@]}" "$prompt"

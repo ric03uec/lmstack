@@ -194,9 +194,30 @@ verification against a stack that did not come up.
 
 ## Phase 7 — Wire the control host
 
-Point the user's editor at the new endpoint. `pi-config/` holds the
-configuration; see its README for the sync step. Confirm with a real request,
-not by reading a config file back.
+Point the user's editor at the new endpoint.
+
+```bash
+make pi-install          # merges into ~/.pi/agent; it does not replace it
+```
+
+Then the user fills `~/.pi/agent/extensions/.env` with the host URL and the
+LiteLLM key. Same rule as Phase 5: you do not read that file and you do not
+ask them to paste it.
+
+Confirm with a real request, not by reading a config file back:
+
+```bash
+pi --list-models | grep lmstack
+pi -p --provider lmstack-h2 --model qwen2.5-coder-7b "reply with the word ok"
+```
+
+If the user works in Claude Code or opencode rather than pi, see
+`pi-config/bridges/README.md` — opencode talks to LiteLLM directly, Claude Code
+goes through `bin/lmstack-ask`.
+
+If the host serves a model the extension does not advertise, `make validate`
+fails with T0.10. Fix it by editing `pi-config/extensions/`, not by editing the
+installed copy under `~/.pi/agent/` — that gets overwritten on the next sync.
 
 ## Logging
 

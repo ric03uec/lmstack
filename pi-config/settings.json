@@ -1,0 +1,7 @@
+{
+  "packages": [
+    "extensions/lmstack-h1.ts",
+    "extensions/lmstack-h2.ts",
+    "npm:@narumitw/pi-statusline"
+  ]
+}

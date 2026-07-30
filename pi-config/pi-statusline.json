@@ -1,0 +1,27 @@
+{
+  "palettePreset": "tokyo-night",
+  "density": "compact",
+  "separator": "none",
+  "segments": [
+    "provider",
+    "model",
+    "branch",
+    "context",
+    "tokens",
+    "time"
+  ],
+  "segmentText": {
+    "provider": { "prefix": "🔌 ", "suffix": "" },
+    "model": {
+      "prefix": "🤖 ",
+      "suffix": "",
+      "truncationLength": 36,
+      "truncationSymbol": "…",
+      "truncationDirection": "start"
+    },
+    "branch": { "prefix": "🌿 ", "suffix": "" },
+    "context": { "prefix": "🪟 ctx ", "suffix": "" },
+    "tokens": { "prefix": "🔢 ", "suffix": "" },
+    "time": { "prefix": "🕒 ", "suffix": "" }
+  }
+}

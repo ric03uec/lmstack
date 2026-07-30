@@ -4,7 +4,7 @@
 # starting point. These targets are the explicit path underneath.
 #
 # Targets arrive with their implementation, one phase at a time (see PLAN.md).
-# pi-install lands in Phase 4, docs in Phase 5.
+# docs lands in Phase 5.
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -26,7 +26,7 @@ help: ## Show this help
 # ---------------------------------------------------------------------------
 
 .PHONY: test
-test: validate validator-test redaction-test render-test classify-test skill-install-test lint ## Run the full offline suite (T0, T1, T6.1-T6.3)
+test: validate validator-test redaction-test render-test classify-test skill-install-test pi-config-test lint ## Run the full offline suite (T0, T1, T4.1, T4.6, T6.1-T6.3)
 
 .PHONY: validate
 validate: ## Validate host and model configuration (T0.3-T0.13)
@@ -52,6 +52,10 @@ classify-test: ## Classify every probe fixture and assert the verdict (T6.1, T6.
 skill-install-test: ## Prove the install binds an absolute repo path (T6.3)
 	@./tests/skill_install_test.sh
 
+.PHONY: pi-config-test
+pi-config-test: ## Prove the pi sync copies extensions and merges (T4.1, T4.6)
+	@./tests/pi_config_test.sh
+
 .PHONY: lint
 lint: ## yamllint, shellcheck, ansible-lint, playbook syntax (T0.1, T0.2)
 	@./tests/lint.sh
@@ -67,6 +71,18 @@ skill-install: ## Install the lmstack skill (AGENT=claude|opencode|pi for one)
 .PHONY: skill-list
 skill-list: ## Show where the skill would be installed, without writing
 	@skills/install.sh --list
+
+# ---------------------------------------------------------------------------
+# Control host
+# ---------------------------------------------------------------------------
+
+.PHONY: pi-install
+pi-install: ## Merge the lmstack pi configuration into ~/.pi/agent
+	@pi-config/sync.sh install
+
+.PHONY: pi-dump
+pi-dump: ## Capture control-host changes back into pi-config/
+	@pi-config/sync.sh dump
 
 # ---------------------------------------------------------------------------
 # Host lifecycle
