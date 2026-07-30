@@ -169,7 +169,8 @@ skill can find the playbooks. That path binding is a test case.
    anything else → explain why it's unsupported and stop.
 4. **Recommend** a catalog entry matching detected VRAM, and show the arithmetic.
 5. **Write config** — `inventory/hosts.ini` and the host's `vars.yml`, shown as a
-   diff for confirmation before writing.
+   diff for confirmation before writing. The skill never runs git; staging and
+   committing stay with the user.
 6. **Secrets** — walk the user through `stack.env` on the host. The skill never
    reads or echoes the values.
 7. **Run** bootstrap → stack → verify, interpreting failures against
@@ -199,6 +200,9 @@ Append-only JSONL, one file per month: `.stacklog/YYYY-MM.jsonl`.
 ```
 
 `event` ∈ `probe | plan | apply | verify | decision | error`.
+
+Only `.gitkeep` is tracked; the JSONL files themselves are gitignored and stay on
+the machine that produced them.
 
 **Redaction — enforced in `scripts/stacklog.sh`, tested in `tests/redaction_test.sh`:**
 
@@ -340,7 +344,7 @@ duplicated playbooks from silently diverging.
 ```bash
 uv tool install ansible-lint
 uv tool install yamllint
-sudo apt install shellcheck        # not a Python package
+uv tool install shellcheck-py      # bundles the shellcheck binary
 ```
 
 `.gitignore` currently covers Python only; Phase 0 adds `node_modules/`,
@@ -348,10 +352,10 @@ sudo apt install shellcheck        # not a Python package
 Note the existing `lib/` rule is a Python artifact rule and must not be allowed
 to swallow anything under `website/`.
 
-## 12. Open items
+## 12. Resolved decisions
 
-- Whether `.stacklog/` should be committed (shared history, needs the redaction
-  guarantee to be airtight) or gitignored (local-only analysis). Currently
-  planned as **committed**, since "a log of changes over time for later analysis"
-  implies durability across clones.
-- Whether the skill should offer to `git commit` the config it writes.
+- **`.stacklog/*.jsonl` is gitignored, local-only.** Only `.gitkeep` is tracked.
+  Redaction is still implemented and tested — defence in depth, not the sole
+  barrier — but nothing from the log can reach a public remote.
+- **The skill never touches git.** It shows a diff, writes on confirmation, and
+  leaves staging and committing entirely to the user.

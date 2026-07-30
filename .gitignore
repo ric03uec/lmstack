@@ -216,3 +216,29 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# =============================================================================
+# lmstack
+# =============================================================================
+
+# Secrets: real env files never leave the host. Only *.example is tracked.
+**/env/*.env
+!**/env/*.env.example
+pi-config/extensions/.env
+
+# The user's real inventory. hosts.ini.example is the tracked template.
+inventory/hosts.ini
+
+# Host change log: local-only analysis data. Only .gitkeep is tracked.
+.stacklog/*
+!.stacklog/.gitkeep
+
+# Rendered artifacts produced by test runs
+tests/.render/
+
+# Docusaurus. NOTE: the Python `lib/` rule above must not swallow website/;
+# these rules are scoped with an explicit website/ prefix.
+node_modules/
+website/node_modules/
+website/build/
+website/.docusaurus/

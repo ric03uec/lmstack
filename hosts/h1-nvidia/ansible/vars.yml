@@ -1,0 +1,32 @@
+---
+# Host variables for h1-nvidia — NVIDIA GPU host served by vLLM.
+#
+# The lmstack skill edits `active_models` and `vram_budget_gib` after probing
+# the host. Everything else is safe to leave alone.
+
+host_alias: h1-nvidia
+engine: vllm
+
+# User-space install root on the target host. No /etc, no /var/lib, no system
+# unit — persistence comes from docker `restart: unless-stopped`.
+install_root: "{{ ansible_user_dir }}/.lmstack"
+
+# The gateway is the only externally reachable port. Engines bind 127.0.0.1.
+litellm_port: 4000
+litellm_image: ghcr.io/berriai/litellm:v1.88.1
+
+# Set to a Tailscale IP to expose the endpoint only on your tailnet.
+# See docs/operations/tailscale.
+litellm_bind_address: "0.0.0.0"
+
+# Writes full prompt and completion text to Postgres. Off by default; turn on
+# only if you understand that it persists everything you send.
+litellm_store_prompts: false
+
+# Ceiling for the sum of vram_estimate_gib across active_models. Validation
+# refuses to render a set that exceeds it.
+vram_budget_gib: 8
+
+# Models to serve. Every entry needs a matching vllm/models/<slug>.yml.
+active_models:
+  - qwen2.5-coder-7b

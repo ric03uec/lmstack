@@ -1,0 +1,22 @@
+---
+# Host variables for h2-amd — AMD GPU/iGPU host served by llama.cpp (Vulkan).
+#
+# This host defaults to `ansible_connection=local` in the inventory, so it works
+# on the machine you are sitting at with no SSH setup.
+
+host_alias: h2-amd
+engine: llamacpp
+
+install_root: "{{ ansible_user_dir }}/.lmstack"
+
+litellm_port: 4000
+litellm_image: ghcr.io/berriai/litellm:v1.88.1
+litellm_bind_address: "0.0.0.0"
+litellm_store_prompts: false
+
+# On unified-memory APUs this is the GTT budget, not a dedicated VRAM pool.
+# It is usually larger than the figure the BIOS reports as "VRAM".
+vram_budget_gib: 8
+
+active_models:
+  - qwen2.5-coder-7b

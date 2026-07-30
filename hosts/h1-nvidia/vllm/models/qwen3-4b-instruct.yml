@@ -1,0 +1,32 @@
+---
+slug: qwen3-4b-instruct
+engine: vllm
+hf_model: Qwen/Qwen3-4B-Instruct-2507
+image: vllm/vllm-openai:latest
+port: 8002
+gpu_memory_utilization: 0.85
+max_model_len: 16384
+max_num_seqs: 4
+dtype: bfloat16
+extra_args:
+  - --enable-prefix-caching
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - hermes
+vram_estimate_gib: 5
+tier: 8g
+mandatory: false
+virtual_models:
+  - name: qwen3-4b-instruct
+  - name: Qwen3-4B-Instruct
+notes: |
+  Fallback for cards below 8 GiB, or a second model on a 12 GiB+ card
+  alongside the 7B coder.
+
+  Runs at bfloat16 rather than a quant: ~8 GiB of weights is too much for a
+  6 GiB card, so on 6 GiB use an AWQ build instead. On 8 GiB this is a
+  tighter fit than the AWQ 7B and is not the default for that reason.
+
+  Not in any host's default active set. The lmstack skill recommends it when
+  the probe reports less VRAM than the 7B needs, or when the user asks for a
+  general instruct model rather than a coder.

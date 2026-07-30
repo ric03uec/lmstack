@@ -1,0 +1,32 @@
+---
+slug: gemma-3-4b-it
+engine: llamacpp
+hf_repo: bartowski/google_gemma-3-4b-it-GGUF
+hf_file: google_gemma-3-4b-it-Q4_K_M.gguf
+image: ghcr.io/ggml-org/llama.cpp:server-vulkan
+port: 8002
+context: 8192
+n_gpu_layers: 999
+parallel_slots: 1
+extra_args:
+  - --jinja
+vram_estimate_gib: 4
+tier: 8g
+mandatory: false
+virtual_models:
+  - name: gemma-3-4b-it
+  - name: Gemma-3-4B-Instruct
+notes: |
+  Small general instruct model. Not in the default active set.
+
+  Two uses: a fallback when the probe reports less than ~7 GiB of usable
+  GPU memory, and a cheap second model on a 12 GiB+ machine for summarising
+  or classification while the coder handles code.
+
+  No --flash-attn: Gemma 3's attention does not benefit from it in the
+  Vulkan backend, and enabling it has caused output corruption on some Mesa
+  versions. Leave it off unless you have measured a win.
+
+  Gemma tool calling is weaker than Qwen's at this size. Do not put this
+  model behind an agent loop that depends on tool calls without running
+  T3.4 against it first.

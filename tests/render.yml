@@ -1,0 +1,65 @@
+---
+# Renders one host's Jinja templates into tests/.render/<host>/ without touching
+# a target machine, so the T1 assertions can inspect the output.
+#
+#   ansible-playbook tests/render.yml -e host=h1-nvidia
+#
+# The fact construction below MIRRORS hosts/<host>/ansible/10-stack.yml. It is a
+# deliberate duplicate: the playbooks are self-contained by design, and the
+# golden files in tests/golden/ are what catch the two drifting apart.
+
+- name: Render host templates offline
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    repo_root: "{{ playbook_dir | dirname }}"
+    host_dir: "{{ repo_root }}/hosts/{{ host }}"
+    render_root: "{{ repo_root }}/tests/.render/{{ host }}"
+
+    # Stand-ins for facts that only exist on a real target. Fixed values, so
+    # the golden files stay stable across machines.
+    ansible_user_dir: /home/lmstack
+    llamacpp_render_gid: 993
+
+  tasks:
+    - name: Require a host
+      ansible.builtin.assert:
+        that: host is defined
+        fail_msg: "pass -e host=<name>, e.g. -e host=h1-nvidia"
+
+    - name: Load host variables
+      ansible.builtin.include_vars:
+        file: "{{ host_dir }}/ansible/vars.yml"
+
+    - name: Load model definitions for the active set
+      ansible.builtin.set_fact:
+        models: >-
+          {{ models | default([])
+             + [lookup('file', host_dir ~ '/' ~ engine ~ '/models/' ~ item ~ '.yml') | from_yaml] }}
+      loop: "{{ active_models }}"
+
+    - name: Find templates
+      ansible.builtin.find:
+        paths: "{{ host_dir }}/{{ engine }}"
+        patterns: "*.j2"
+        recurse: true
+      register: found_templates
+
+    - name: Create output directories
+      ansible.builtin.file:
+        path: "{{ (render_root ~ '/' ~ item.path | relpath(host_dir ~ '/' ~ engine)) | dirname }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ found_templates.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+
+    - name: Render each template
+      ansible.builtin.template:
+        src: "{{ item.path }}"
+        dest: "{{ render_root }}/{{ item.path | relpath(host_dir ~ '/' ~ engine) | regex_replace('\\.j2$', '') }}"
+        mode: "0644"
+      loop: "{{ found_templates.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"

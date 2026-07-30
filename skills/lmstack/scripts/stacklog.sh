@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# Append one redacted JSONL event to .stacklog/YYYY-MM.jsonl.
+#
+# Every action the lmstack skill takes against a host goes through here, so the
+# log is a durable record of what changed on which host over time. The files are
+# gitignored and never leave the machine that produced them; the redaction below
+# is defence in depth, not the only barrier.
+#
+# Redaction is unconditional and applied to the assembled event, so it also
+# covers anything a caller passes through --detail without thinking.
+#
+# Usage:
+#   stacklog.sh --host h1-nvidia --event apply --action bootstrap.docker_install \
+#               --status ok [--duration-ms 41230] [--run-id 01J9X] \
+#               [--actor skill] [--detail '{"packages":["docker-ce"]}'] \
+#               [--hw '{"gpu":"RTX 4070","vram_gib":12}'] \
+#               [--models 'qwen2.5-coder-7b,gemma-3-4b'] \
+#               [--error-kind health_gate_timeout --error-msg "..."]
+#
+# Env:
+#   LMSTACK_STACKLOG_DIR  override the output directory (used by tests)
+
+set -euo pipefail
+
+# Key names whose values are always dropped, whatever they contain.
+readonly REDACT_KEY_RE='token|key|secret|password|passwd|auth|bearer|credential'
+
+# Value shapes that are dropped wherever they appear, whatever the key is called.
+readonly REDACT_VAL_RE='sk-[A-Za-z0-9_-]{8,}|hf_[A-Za-z0-9]{8,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[Bb]earer[[:space:]]+[A-Za-z0-9._-]+'
+
+readonly REDACTED='[REDACTED]'
+
+die() { printf 'stacklog: %s\n' "$1" >&2; exit 1; }
+
+command -v jq >/dev/null 2>&1 || die "jq is required but not installed"
+
+host=""; event=""; action=""; status=""; actor="skill"
+duration_ms=""; run_id=""; detail="{}"; hw="null"; models=""
+error_kind=""; error_msg=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --host)        host="$2";        shift 2 ;;
+    --event)       event="$2";       shift 2 ;;
+    --action)      action="$2";      shift 2 ;;
+    --status)      status="$2";      shift 2 ;;
+    --actor)       actor="$2";       shift 2 ;;
+    --duration-ms) duration_ms="$2"; shift 2 ;;
+    --run-id)      run_id="$2";      shift 2 ;;
+    --detail)      detail="$2";      shift 2 ;;
+    --hw)          hw="$2";          shift 2 ;;
+    --models)      models="$2";      shift 2 ;;
+    --error-kind)  error_kind="$2";  shift 2 ;;
+    --error-msg)   error_msg="$2";   shift 2 ;;
+    -h|--help)     sed -n '2,25p' "$0"; exit 0 ;;
+    *)             die "unknown argument: $1" ;;
+  esac
+done
+
+[[ -n "$host"   ]] || die "--host is required"
+[[ -n "$event"  ]] || die "--event is required"
+[[ -n "$action" ]] || die "--action is required"
+[[ -n "$status" ]] || die "--status is required"
+
+case "$event" in
+  probe|plan|apply|verify|decision|error) ;;
+  *) die "invalid --event '$event' (probe|plan|apply|verify|decision|error)" ;;
+esac
+
+case "$status" in
+  ok|failed|skipped) ;;
+  *) die "invalid --status '$status' (ok|failed|skipped)" ;;
+esac
+
+# The host field is the inventory alias, never a routable address. Reject
+# anything that looks like an IP or FQDN so a hostname can't leak by habit.
+if [[ "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$host" == *.* ]]; then
+  die "--host must be an inventory alias (e.g. h1-nvidia), not an address"
+fi
+
+# `jq empty` validates without emitting; `jq -e .` would treat a legitimate
+# `null` payload (the default for --hw) as a failure.
+jq empty <<<"$detail" 2>/dev/null || die "--detail is not valid JSON"
+jq empty <<<"$hw"     2>/dev/null || die "--hw is not valid JSON"
+
+if [[ -z "$run_id" ]]; then
+  run_id="${LMSTACK_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')}"
+fi
+
+models_json="$(jq -cn --arg m "$models" '
+  if $m == "" then [] else ($m | split(",") | map(gsub("^\\s+|\\s+$"; ""))) end')"
+
+error_json="null"
+if [[ -n "$error_kind" || -n "$error_msg" ]]; then
+  error_json="$(jq -cn --arg k "$error_kind" --arg m "$error_msg" '{kind: $k, msg: $m}')"
+fi
+
+outdir="${LMSTACK_STACKLOG_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/.stacklog}"
+mkdir -p "$outdir"
+outfile="$outdir/$(date -u +%Y-%m).jsonl"
+
+jq -cn \
+  --arg ts        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg run_id    "$run_id" \
+  --arg host      "$host" \
+  --arg actor     "$actor" \
+  --arg event     "$event" \
+  --arg action    "$action" \
+  --arg status    "$status" \
+  --arg duration  "$duration_ms" \
+  --argjson detail "$detail" \
+  --argjson hw     "$hw" \
+  --argjson models "$models_json" \
+  --argjson error  "$error_json" \
+  --arg keyre     "$REDACT_KEY_RE" \
+  --arg valre     "$REDACT_VAL_RE" \
+  --arg redacted  "$REDACTED" '
+  def redact:
+    walk(
+      if type == "object" then
+        with_entries(if (.key | test($keyre; "i")) then .value = $redacted else . end)
+      elif type == "string" then
+        (if test($valre) then $redacted else . end)
+      else . end
+    );
+
+  {
+    ts: $ts,
+    run_id: $run_id,
+    host: $host,
+    actor: $actor,
+    event: $event,
+    action: $action,
+    status: $status,
+    duration_ms: (if $duration == "" then null else ($duration | tonumber) end),
+    hw: $hw,
+    models: $models,
+    detail: $detail,
+    error: $error
+  } | redact
+' >> "$outfile"
+
+printf '%s\n' "$outfile"

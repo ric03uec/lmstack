@@ -1,0 +1,16 @@
+---
+# T0.11 — alias parity across engines.
+#
+# The point of lmstack is that the control host does not care which engine
+# served a model. `qwen2.5-coder-7b` must mean the same thing whether it came
+# from vLLM on an NVIDIA card or llama.cpp on an AMD iGPU, so pi-config,
+# Claude Code, and opencode need no per-host branching.
+#
+# Adding a host to this list commits it to serving every alias below.
+
+required_common_aliases:
+  - qwen2.5-coder-7b
+
+hosts:
+  - h1-nvidia
+  - h2-amd

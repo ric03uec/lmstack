@@ -1,0 +1,51 @@
+---
+slug: qwen2.5-coder-7b
+engine: vllm
+hf_model: Qwen/Qwen2.5-Coder-7B-Instruct-AWQ
+image: vllm/vllm-openai:latest
+port: 8001
+gpu_memory_utilization: 0.90
+max_model_len: 16384
+max_num_seqs: 2
+dtype: auto
+extra_args:
+  - --enable-prefix-caching
+  - --enable-auto-tool-choice
+  - --tool-call-parser
+  - hermes
+vram_estimate_gib: 6
+tier: 8g
+mandatory: true
+virtual_models:
+  - name: qwen2.5-coder-7b
+  - name: Qwen2.5-Coder-7B-Instruct
+notes: |
+  Default model for h1-nvidia. Deliberately chosen so the repo's first
+  `make up` succeeds on an 8 GiB card.
+
+  AWQ 4-bit rather than FP16: the FP16 weights are ~15 GiB and will not fit
+  in 8 GiB at any context length. AWQ brings weights to ~4.7 GiB, leaving
+  room for the KV cache. vLLM auto-detects the AWQ config from the repo, so
+  no --quantization flag is needed; on Ampere and newer it selects the
+  awq_marlin kernel automatically.
+
+  Sizing at 8 GiB: gpu_memory_utilization 0.90 allocates ~7.2 GiB. Weights
+  take ~4.7 GiB, leaving ~2.5 GiB of KV cache. At 16384 context that is
+  roughly 2 concurrent full-length sequences, hence max_num_seqs: 2. Raising
+  max_model_len to 32768 on an 8 GiB card will start preempting; raise the
+  card before raising the context.
+
+  --tool-call-parser hermes is what vLLM ships for the Qwen2.5 ChatML
+  <tool_call> format. Without it, tool calls arrive as prose inside
+  message.content and every agent loop silently breaks. This is the single
+  most common failure in practice, so it is covered by test T3.4.
+
+  image: `latest` is convenient but not reproducible. Pin it once your host
+  works — `docker inspect vllm/vllm-openai:latest --format '{{index .RepoDigests 0}}'`
+  and record the digest here.
+
+  Alias parity: exposes `qwen2.5-coder-7b`, identical to the h2-amd GGUF
+  build of the same model, so control-host config is engine-agnostic.
+  Enforced by tests/parity.yml.
+
+  Source: https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-AWQ

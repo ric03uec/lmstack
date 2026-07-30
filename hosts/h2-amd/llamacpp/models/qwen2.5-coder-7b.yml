@@ -1,0 +1,46 @@
+---
+slug: qwen2.5-coder-7b
+engine: llamacpp
+hf_repo: bartowski/Qwen2.5-Coder-7B-Instruct-GGUF
+hf_file: Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
+image: ghcr.io/ggml-org/llama.cpp:server-vulkan
+port: 8001
+context: 16384
+n_gpu_layers: 999
+parallel_slots: 1
+extra_args:
+  - --jinja
+  - --flash-attn
+  - "on"
+vram_estimate_gib: 6
+tier: 8g
+mandatory: true
+virtual_models:
+  - name: qwen2.5-coder-7b
+  - name: Qwen2.5-Coder-7B-Instruct
+notes: |
+  Default model for h2-amd. Same model as the h1-nvidia default, served by a
+  different engine, exposed under an identical alias — see tests/parity.yml.
+
+  Vulkan rather than ROCm: ROCm supports a narrow set of discrete AMD cards,
+  while the Vulkan backend works on iGPUs, APUs, and consumer dGPUs alike.
+  For a repo whose promise is "works on the AMD machine you already have",
+  portability beats peak throughput.
+
+  Q4_K_M (~4.7 GiB weights) plus ~1.3 GiB of KV cache at 16384 context fits
+  inside an 8 GiB budget with a little headroom. On unified-memory APUs the
+  relevant limit is the GTT allocation, not a dedicated VRAM pool, so the
+  effective ceiling is usually higher than the BIOS "VRAM" figure suggests.
+
+  Quantization and tool calling interact. The source deployment this was
+  ported from found Q4_K_M improvising tool-call wrappers (<xml>, ```json
+  fences) that llama.cpp's chat parser does not recognise, dumping the call
+  into message.content. Q6_K restored adherence. If T3.4 fails here, raise
+  the quant before touching the chat template.
+
+  n_gpu_layers: 999 means "offload everything"; llama.cpp clamps to the
+  actual layer count. Drop it if the model does not fit and you want partial
+  CPU offload rather than a hard failure.
+
+  --jinja uses the GGUF's embedded chat template, which carries the full
+  Qwen ChatML <tools>/<tool_call> plumbing.

@@ -1,0 +1,49 @@
+# lmstack inventory — copy to hosts.ini and edit.
+#
+#   cp inventory/hosts.ini.example inventory/hosts.ini
+#
+# hosts.ini is gitignored; this template is the tracked version. The lmstack
+# skill writes hosts.ini for you after probing, but editing it by hand is
+# perfectly reasonable.
+#
+# Host aliases are generic on purpose — h1-nvidia, h2-amd, h3-… — so that
+# documentation, the skill, and the .stacklog history refer to a role rather
+# than to someone's machine name.
+
+[all:vars]
+ansible_user=CHANGE_ME
+ansible_ssh_private_key_file=~/.ssh/id_ed25519
+
+# =============================================================================
+# h1-nvidia — NVIDIA GPU host, served by vLLM.
+#
+# A DGX Spark, a workstation with an RTX card, or a cloud GPU box. Needs the
+# NVIDIA driver already installed; the bootstrap playbook adds Docker and the
+# NVIDIA container toolkit on top.
+# =============================================================================
+[h1_nvidia]
+h1-nvidia ansible_host=192.168.1.100
+
+# =============================================================================
+# h2-amd — AMD GPU or iGPU host, served by llama.cpp over Vulkan.
+#
+# Defaults to the machine you are sitting at, so `make up HOST=h2-amd` works
+# with no SSH setup at all. Point it at a remote box by replacing the
+# connection setting with `ansible_host=…` as above.
+# =============================================================================
+[h2_amd]
+h2-amd ansible_connection=local
+
+# =============================================================================
+# h3 and beyond — copy hosts/h3-template/ and add the host here.
+# See docs: hosts/adding-a-host.
+# =============================================================================
+# [h3_nvidia]
+# h3-nvidia ansible_host=192.168.1.101
+
+# =============================================================================
+# Functional groups
+# =============================================================================
+[gpu_hosts:children]
+h1_nvidia
+h2_amd
