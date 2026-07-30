@@ -4,7 +4,6 @@
 # starting point. These targets are the explicit path underneath.
 #
 # Targets arrive with their implementation, one phase at a time (see PLAN.md).
-# docs lands in Phase 5.
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -134,3 +133,20 @@ stacklog: ## Pretty-print the local host change log
 	@cat .stacklog/*.jsonl 2>/dev/null \
 		| jq -r '"\(.ts)  \(.host)  \(.status|ascii_upcase)  \(.action)"' \
 		|| echo "no .stacklog entries yet"
+
+# ---------------------------------------------------------------------------
+# Documentation
+# ---------------------------------------------------------------------------
+
+# npm ci needs the lockfile; the first run on a clone has no node_modules.
+website/node_modules: website/package-lock.json
+	@cd website && npm ci
+	@touch website/node_modules
+
+.PHONY: docs
+docs: website/node_modules ## Serve the documentation site with hot reload
+	@cd website && npm start
+
+.PHONY: docs-build
+docs-build: website/node_modules ## Build the static site; fails on a broken link
+	@cd website && npm run build

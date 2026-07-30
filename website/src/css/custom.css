@@ -1,0 +1,29 @@
+/* Docusaurus infima overrides. Kept short on purpose: this is a documentation
+   site for a tool, and every line here is a line to maintain. */
+
+:root {
+  --ifm-color-primary: #2d6f88;
+  --ifm-color-primary-dark: #29647a;
+  --ifm-color-primary-darker: #265e73;
+  --ifm-color-primary-darkest: #1f4d5e;
+  --ifm-color-primary-light: #317a96;
+  --ifm-color-primary-lighter: #34809d;
+  --ifm-color-primary-lightest: #3b91b2;
+  --ifm-code-font-size: 92%;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #7dcfff;
+  --ifm-color-primary-dark: #5cc2ff;
+  --ifm-color-primary-darker: #4cbcff;
+  --ifm-color-primary-darkest: #1aa8ff;
+  --ifm-color-primary-light: #9edcff;
+  --ifm-color-primary-lighter: #aee2ff;
+  --ifm-color-primary-lightest: #dff2ff;
+  --ifm-background-color: #090c0c;
+}
+
+/* The topology diagrams are ASCII and must not reflow. */
+pre code {
+  white-space: pre;
+}

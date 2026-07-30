@@ -85,6 +85,17 @@ It validates every model YAML against the schema, proves the validator rejects
 known-bad configuration, checks alias parity across engines, and feeds real
 secret shapes through the `.stacklog` writer to confirm none survive.
 
+## Documentation
+
+Full docs at **https://ric03uec.github.io/lmstack** — host setup, the model
+schema, editor bridges, and a troubleshooting table keyed to the same `kind`
+values the change log records.
+
+```bash
+make docs          # localhost:3000, hot reload
+make docs-build    # static build; fails on a broken link
+```
+
 ## Privacy
 
 `.stacklog/` records what changed on your hosts, for your own later analysis.
@@ -102,7 +113,7 @@ matrix.
 - [x] Phase 2 — `h2-amd` playbooks
 - [x] Phase 3 — the skill
 - [x] Phase 4 — `pi-config` and agent bridges
-- [ ] Phase 5 — documentation site
+- [x] Phase 5 — documentation site
 - [ ] Phase 6 — host template and CI
 
 ## License
