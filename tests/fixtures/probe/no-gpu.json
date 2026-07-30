@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "os": {"id": "debian", "version": "12", "pretty": "Debian GNU/Linux 12 (bookworm)", "kernel": "6.1.0-27-amd64", "arch": "x86_64"},
+  "mem_total_gib": 8,
+  "gpu": {"vendor": "none", "model": null, "vram_gib": null, "gtt_gib": null, "driver": null},
+  "dri_nodes": [],
+  "vulkan": {"present": false, "device": null},
+  "docker": {"present": false, "usable": false, "version": null, "runtimes": []},
+  "sudo": "passwordless"
+}

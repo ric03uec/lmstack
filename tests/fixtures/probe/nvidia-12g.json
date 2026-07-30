@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "os": {"id": "ubuntu", "version": "24.04", "pretty": "Ubuntu 24.04.1 LTS", "kernel": "6.8.0-51-generic", "arch": "x86_64"},
+  "mem_total_gib": 62,
+  "gpu": {"vendor": "nvidia", "model": "NVIDIA GeForce RTX 4070", "vram_gib": 12, "gtt_gib": null, "driver": "580.65.06"},
+  "dri_nodes": ["/dev/dri/renderD128"],
+  "vulkan": {"present": false, "device": null},
+  "docker": {"present": true, "usable": true, "version": "27.3.1", "runtimes": ["nvidia", "runc"]},
+  "sudo": "passwordless"
+}

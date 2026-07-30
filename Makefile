@@ -4,7 +4,7 @@
 # starting point. These targets are the explicit path underneath.
 #
 # Targets arrive with their implementation, one phase at a time (see PLAN.md).
-# skill-install lands in Phase 3, pi-install in Phase 4, docs in Phase 5.
+# pi-install lands in Phase 4, docs in Phase 5.
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -26,7 +26,7 @@ help: ## Show this help
 # ---------------------------------------------------------------------------
 
 .PHONY: test
-test: validate validator-test redaction-test render-test lint ## Run the full offline suite (T0, T1)
+test: validate validator-test redaction-test render-test classify-test skill-install-test lint ## Run the full offline suite (T0, T1, T6.1-T6.3)
 
 .PHONY: validate
 validate: ## Validate host and model configuration (T0.3-T0.13)
@@ -44,9 +44,29 @@ redaction-test: ## Prove .stacklog never records secrets (T0.12)
 render-test: ## Render every host's templates and assert the invariants (T1)
 	@./tests/render_test.sh
 
+.PHONY: classify-test
+classify-test: ## Classify every probe fixture and assert the verdict (T6.1, T6.2)
+	@./tests/probe_classify_test.sh
+
+.PHONY: skill-install-test
+skill-install-test: ## Prove the install binds an absolute repo path (T6.3)
+	@./tests/skill_install_test.sh
+
 .PHONY: lint
 lint: ## yamllint, shellcheck, ansible-lint, playbook syntax (T0.1, T0.2)
 	@./tests/lint.sh
+
+# ---------------------------------------------------------------------------
+# Skill
+# ---------------------------------------------------------------------------
+
+.PHONY: skill-install
+skill-install: ## Install the lmstack skill (AGENT=claude|opencode|pi for one)
+	@skills/install.sh $(if $(AGENT),--agent $(AGENT),)
+
+.PHONY: skill-list
+skill-list: ## Show where the skill would be installed, without writing
+	@skills/install.sh --list
 
 # ---------------------------------------------------------------------------
 # Host lifecycle

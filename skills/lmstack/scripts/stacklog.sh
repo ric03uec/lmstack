@@ -95,7 +95,11 @@ if [[ -n "$error_kind" || -n "$error_msg" ]]; then
   error_json="$(jq -cn --arg k "$error_kind" --arg m "$error_msg" '{kind: $k, msg: $m}')"
 fi
 
-outdir="${LMSTACK_STACKLOG_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/.stacklog}"
+# The installed copy of this skill does not sit inside the repo, so walking up
+# from BASH_SOURCE would land in the agent's config directory. LMSTACK_REPO is
+# what the skill exports; the walk-up is the running-from-a-clone case.
+repo_root="${LMSTACK_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+outdir="${LMSTACK_STACKLOG_DIR:-$repo_root/.stacklog}"
 mkdir -p "$outdir"
 outfile="$outdir/$(date -u +%Y-%m).jsonl"
 

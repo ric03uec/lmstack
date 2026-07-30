@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "os": {"id": "ubuntu", "version": "24.04", "pretty": "Ubuntu 24.04.1 LTS", "kernel": "6.8.0-51-generic", "arch": "x86_64"},
+  "mem_total_gib": 32,
+  "gpu": {"vendor": "amd", "model": "Navi 33 [Radeon RX 7600]", "vram_gib": 8, "gtt_gib": 15, "driver": "amdgpu"},
+  "dri_nodes": [],
+  "vulkan": {"present": false, "device": null},
+  "docker": {"present": true, "usable": true, "version": "27.3.1", "runtimes": ["runc"]},
+  "sudo": "passwordless"
+}

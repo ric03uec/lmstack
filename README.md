@@ -23,7 +23,8 @@ enforces it rather than a comment promising it.
 
 ```bash
 git clone https://github.com/ric03uec/lmstack && cd lmstack
-make skill-install       # installs the lmstack skill for your agent
+make skill-install                 # every agent directory you have
+make skill-install AGENT=claude    # or just one: claude | opencode | pi
 ```
 
 Then ask your agent:
@@ -35,7 +36,11 @@ fits the VRAM it found, shows you every file it wants to write, and runs the
 playbooks. It is the supported path. `make up HOST=...` is the same thing
 without the conversation.
 
-Both are still being built — see [Status](#status). `make test` works today.
+The install binds this repository's absolute path into the skill, so moving or
+renaming the clone means re-running it.
+
+The last step — pointing your editor at the new endpoint — is still being built;
+see [Status](#status).
 
 ## What runs where
 
@@ -89,7 +94,7 @@ matrix.
 - [x] Phase 0 — model contract, validator, `.stacklog` writer, offline tests
 - [x] Phase 1 — `h1-nvidia` playbooks
 - [x] Phase 2 — `h2-amd` playbooks
-- [ ] Phase 3 — the skill
+- [x] Phase 3 — the skill
 - [ ] Phase 4 — `pi-config` and agent bridges
 - [ ] Phase 5 — documentation site
 - [ ] Phase 6 — host template and CI

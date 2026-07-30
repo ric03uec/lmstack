@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "os": {"id": "fedora", "version": "41", "pretty": "Fedora Linux 41", "kernel": "6.11.4-301.fc41.x86_64", "arch": "x86_64"},
+  "mem_total_gib": 32,
+  "gpu": {"vendor": "amd", "model": "Navi 31 [Radeon RX 7900 XT]", "vram_gib": 20, "gtt_gib": 15, "driver": "amdgpu"},
+  "dri_nodes": ["/dev/dri/renderD128"],
+  "vulkan": {"present": true, "device": "AMD Radeon RX 7900 XT (RADV NAVI31)"},
+  "docker": {"present": true, "usable": false, "version": "27.3.1", "runtimes": []},
+  "sudo": "passwordless"
+}
