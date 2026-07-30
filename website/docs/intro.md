@@ -10,21 +10,50 @@ A local LLM stack for development: models served on hardware you own, behind one
 OpenAI-compatible endpoint, wired into your editor.
 
 ```
-  ┌──────────────────────┐          ┌──────────────────────────┐
-  │  control host        │          │  GPU host                │
-  │  pi / Claude Code /  │  HTTP    │                          │
-  │  opencode            ├─────────▶│  LiteLLM  :4000          │
-  │                      │  OpenAI  │     │                    │
-  └──────────────────────┘   API    │     ├─▶ engine  :8001 *  │
-                                    │     ├─▶ engine  :8002 *  │
-                                    │     └─▶ postgres      *  │
-                                    │                          │
-                                    │  * = 127.0.0.1 only      │
-                                    └──────────────────────────┘
+              control host — where you write code
+┌─────────────────────────────────────────────────────────────┐
+│  pi   ·   Claude Code   ·   opencode                        │
+│  pi-config/ — one provider entry per host, and the same     │
+│  model alias on both, so switching is a flag not a rewrite  │
+└──────────────────────────────┬──────────────────────────────┘
+                               │  OpenAI-compatible + master key
+               ┌───────────────┴───────────────┐
+               │                               │
+┌──────────────▼──────────────┐ ┌──────────────▼──────────────┐
+│ h1-nvidia — NVIDIA + CUDA   │ │ h2-amd — AMD, or localhost  │
+├─────────────────────────────┤ ├─────────────────────────────┤
+│  LiteLLM             :4000  │ │  LiteLLM             :4000  │
+│    routing · keys · usage   │ │    routing · keys · usage   │
+│       │                     │ │       │                     │
+│  ┌────▼──────────────────┐  │ │  ┌────▼──────────────────┐  │
+│  │ vLLM           :8001  │  │ │  │ llama.cpp      :8001  │  │
+│  │ qwen2.5-coder-7b      │  │ │  │ qwen2.5-coder-7b      │  │
+│  │ CUDA · AWQ 4-bit      │  │ │  │ Vulkan · GGUF Q4_K_M  │  │
+│  └───────────────────────┘  │ │  └───────────────────────┘  │
+│                             │ │                             │
+│  Postgres — no ports at all │ │  Postgres — no ports at all │
+└─────────────────────────────┘ └─────────────────────────────┘
 ```
 
-Only the gateway is reachable off-box. The engines bind loopback, and
-`tests/render_test.sh` fails the build if a template ever stops doing that.
+Read it in three layers.
+
+**The boundary.** Only `:4000` leaves either box. Engines bind `127.0.0.1` and
+Postgres publishes nothing at all, so the gateway is the only thing an attacker
+on your LAN can reach — and `tests/render_test.sh` fails the build if a template
+ever stops doing that. Putting the host on Tailscale rather than opening a
+firewall port is [the recommended way in](operations/tailscale).
+
+**The gateway.** LiteLLM holds the routing table, the master key, and the usage
+UI. It is what makes two very different engines look like one OpenAI-compatible
+provider, and it is why the control host needs no per-engine knowledge.
+
+**The engines.** One container per active model, numbered from `:8001`. Adding a
+model to `active_models` adds a container; the VRAM budget check is what stops
+you adding one that will not fit.
+
+The two hosts are not a cluster. Nothing balances between them and they do not
+know about each other — they are two independent boxes your editor can point at,
+which is why moving a workload between them is a `--provider` change.
 
 ## What it is for
 
@@ -64,6 +93,11 @@ blame on the repo.
 
 ## Where to go next
 
-- [Quickstart](quickstart) — from a clone to an answering endpoint.
-- [The skill](skill) — the interactive installer, and what it will and will not do.
+Paste this at your coding agent and it will take it from there:
+
+> install the lmstack skill from https://ric03uec.github.io/lmstack/install
+
+- [Install the skill](install) — that page, including how to do it by hand.
+- [The skill](skill) — what the installer does at each phase, and what it refuses to do.
+- [Quickstart](quickstart) — the same work done explicitly, without an agent.
 - [Troubleshooting](operations/troubleshooting) — when the endpoint does not answer.

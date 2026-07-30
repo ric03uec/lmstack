@@ -1,13 +1,15 @@
 ---
-sidebar_position: 2
+sidebar_position: 4
 title: Quickstart
 ---
 
 # Quickstart
 
-Two paths. The skill is the supported one; the explicit one is the same work
-without the conversation, and is worth reading even if you use the skill,
-because it is what the skill runs.
+This is the explicit path: every step the skill would take, done by hand. It is
+worth reading even if you use the skill, because it is what the skill runs.
+
+If you would rather not, [install the skill](install) and ask it for a starting
+point.
 
 ## Before you start
 
@@ -16,28 +18,10 @@ because it is what the skill runs.
 - SSH access to it, or it is the machine you are sitting at.
 - On the control host: `git`, `make`, `jq`, `python3`, and Ansible.
 
-You do not need Docker on the GPU host. Bootstrap installs it.
+Install Ansible with `uv tool install ansible-core`. You do not need Docker on
+the GPU host — bootstrap installs it.
 
-## Path 1 — the skill
-
-```bash
-git clone https://github.com/ric03uec/lmstack && cd lmstack
-make skill-install                 # every agent directory you have
-make skill-install AGENT=claude    # or one of claude | opencode | pi
-```
-
-Then ask your agent:
-
-> use the lmstack skill to give me a starting point
-
-It asks which host to target, probes the hardware, shows you the sizing
-arithmetic, and writes nothing without showing you a diff first. See
-[The skill](skill) for what it does at each phase.
-
-The install binds this clone's absolute path into the skill, so moving or
-renaming the directory means running `make skill-install` again.
-
-## Path 2 — explicit
+## Set up the control host
 
 ```bash
 git clone https://github.com/ric03uec/lmstack && cd lmstack

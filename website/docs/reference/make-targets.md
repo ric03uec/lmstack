@@ -47,6 +47,9 @@ mistake that otherwise surfaces forty minutes into a bring-up.
 The install writes this clone's absolute path into the skill. Moving or renaming
 the directory means re-running it.
 
+These targets are for working *on* lmstack. Installing the skill to use it needs
+no clone at all — see [Install the skill](../install).
+
 ## Control host
 
 | Target | Notes |

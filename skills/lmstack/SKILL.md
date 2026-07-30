@@ -6,32 +6,21 @@ description: Interactive installer for lmstack — a local LLM stack served behi
 # lmstack
 
 You are installing a local LLM inference stack on a GPU host and pointing the
-user's editor at it. The repository is at `{{LMSTACK_REPO}}`.
+user's editor at it.
 
-Export that path first and use it for everything. This installed copy of the
-skill does **not** sit inside the repository, so a relative path resolves against
-the agent's skill directory and finds nothing:
-
-```bash
-export LMSTACK_REPO={{LMSTACK_REPO}}
-cd "$LMSTACK_REPO"
-```
-
-If that directory does not exist the repository was moved or renamed. Tell the
-user to re-run `make skill-install` from its new location; do not go looking for
-it.
-
-Work through the phases in order. Each one ends with a decision the user makes,
-not one you make for them.
+Work through the phases in order, starting at Phase 0. Each one ends with a
+decision the user makes, not one you make for them.
 
 ## Ground rules
 
 These are not style preferences. Breaking one damages something the user cares
 about more than the install succeeding.
 
-1. **Never run git.** Not `add`, not `commit`, not `checkout`, not `stash`. You
-   write files; the user decides what becomes a commit. If the working tree is
-   dirty, say so and continue — it is not your tree to clean.
+1. **Never run git inside the repository.** Not `add`, not `commit`, not
+   `checkout`, not `stash`. You write files; the user decides what becomes a
+   commit. If the working tree is dirty, say so and continue — it is not your
+   tree to clean. The one exception is the first-time `git clone` in Phase 0,
+   which creates a repository rather than changing one.
 2. **Never read, echo, or write secret values.** You tell the user to fill
    `stack.env` on the host and you verify the shape of the result by running the
    playbook, which checks for non-empty without printing. If you ever find
@@ -46,6 +35,66 @@ about more than the install succeeding.
 6. **Stop on an unsupported host.** Explain why and what would change the
    verdict. Do not fall back to CPU inference; it is slow enough to look broken
    and the user will blame the repo.
+
+## Phase 0 — Find the repository
+
+You are running from the agent's skill directory, not from inside the
+repository, so a relative path finds nothing. The playbooks, the model catalog,
+and the validator all live in the repository, and everything after this phase
+needs `$LMSTACK_REPO` set.
+
+Resolve it in this order — an explicit override, the path bound at install time,
+then the default clone location:
+
+```bash
+bound='{{LMSTACK_REPO}}'
+for candidate in "${LMSTACK_REPO:-}" "$bound" "$HOME/lmstack"; do
+  if [ -n "$candidate" ] && [ -d "$candidate/hosts" ]; then
+    export LMSTACK_REPO="$candidate"
+    break
+  fi
+done
+echo "${LMSTACK_REPO:-NOT FOUND}"
+```
+
+If that printed a path, use it and go to Phase 1.
+
+If it printed `NOT FOUND`, the user installed the skill on its own, which is the
+normal way in. Tell them you need a clone to work from, offer
+`~/lmstack`, and take a different path if they want one:
+
+```bash
+export LMSTACK_REPO="$HOME/lmstack"
+git clone https://github.com/ric03uec/lmstack "$LMSTACK_REPO"
+```
+
+This is the only git command in the skill. Do not run it without asking, and do
+not clone over a directory that already has something in it.
+
+Then check the control host has what the playbooks need:
+
+```bash
+cd "$LMSTACK_REPO"
+for t in make python3 jq ansible-playbook; do
+  command -v "$t" >/dev/null || echo "missing: $t"
+done
+```
+
+`ansible-playbook` is the one most likely to be missing. Install it with
+`uv tool install ansible-core` — not pipx, not the system package manager — then
+fetch the collections the playbooks import:
+
+```bash
+make deps
+```
+
+Nothing here touches the GPU host. If any of it fails, stop and report it: a
+missing tool on the control host is a two-minute fix, and finding out about it
+halfway through a bring-up is not.
+
+```bash
+"$LMSTACK_REPO/skills/lmstack/scripts/stacklog.sh" --host pending --event decision --action repo.ready --status ok
+```
 
 ## Phase 1 — Target
 

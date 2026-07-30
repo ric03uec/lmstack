@@ -36,7 +36,7 @@ a `jq` filter does not have to guard for a missing field.
 |---|---|---|---|
 | `ts` | string | auto | UTC, `%Y-%m-%dT%H:%M:%SZ`. |
 | `run_id` | string | auto | Shared across one install session. Set `LMSTACK_RUN_ID` once so every line correlates; otherwise each line gets its own. |
-| `host` | string | **yes** | The inventory alias. The writer rejects anything containing a dot, so an IP or FQDN cannot get in. |
+| `host` | string | **yes** | The inventory alias, or `pending` on the lines written before one has been chosen. The writer rejects anything containing a dot, so an IP or FQDN cannot get in. |
 | `actor` | string | no | Defaults to `skill`. |
 | `event` | enum | **yes** | See below. |
 | `action` | string | **yes** | Dotted, stable, machine-groupable. |
@@ -66,11 +66,12 @@ back exactly which lines touched the machine.
 Dotted namespaces, stable over time so grouping across months works:
 
 ```
-probe.hardware            bootstrap.docker_install
-probe.gpu                 bootstrap.gpu_runtime
-plan.model_selection      stack.render
-decision.model            stack.up
-verify.aliases            verify.tool_calls
+repo.ready                bootstrap.docker_install
+probe.hardware            bootstrap.gpu_runtime
+probe.gpu                 stack.render
+plan.model_selection      stack.up
+decision.model            verify.tool_calls
+verify.aliases
 ```
 
 Inventing a new action is fine. Renaming an existing one silently breaks every

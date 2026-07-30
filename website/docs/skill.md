@@ -8,13 +8,7 @@ title: The skill
 The interactive installer. It runs inside your agent — Claude Code, opencode, or
 pi — and walks a host from bare GPU to answering endpoint.
 
-```bash
-make skill-install                 # every agent directory that exists
-make skill-install AGENT=claude    # or force one: claude | opencode | pi
-make skill-list                    # show where it would go, write nothing
-```
-
-Then: *use the lmstack skill to give me a starting point*.
+[Install it](install), then: *use the lmstack skill to give me a starting point*.
 
 ## Why a skill and not a script
 
@@ -32,9 +26,11 @@ and the arithmetic is the part that gets someone an out-of-memory error at 3am.
 
 These are enforced as rules in the skill prompt, not preferences.
 
-**It never runs git.** Not `add`, not `commit`, not `checkout`, not `stash`. It
-writes files; you decide what becomes a commit. A dirty working tree gets
-mentioned and then left alone.
+**It never runs git inside the repository.** Not `add`, not `commit`, not
+`checkout`, not `stash`. It writes files; you decide what becomes a commit. A
+dirty working tree gets mentioned and then left alone. The single exception is
+the first-time `git clone` in Phase 0, which creates a repository rather than
+changing one, and it asks before running it.
 
 **It never reads or writes a secret value.** It tells you what to put in
 `stack.env` and verifies the result by running the playbook, which checks for
@@ -48,6 +44,20 @@ host's `vars.yml` is shown and confirmed first.
 change the verdict instead.
 
 ## The phases
+
+### Phase 0 — find the repository
+
+The skill is a copy sitting in your agent's skill directory, not inside the
+repository, so before it can do anything it has to find the playbooks. It looks
+at `$LMSTACK_REPO`, then at a path bound at install time if you installed from a
+clone, then at `~/lmstack`.
+
+If none of those exist — the normal case when you installed the skill on its
+own — it asks where to clone and does it. Then it checks the control host has
+`make`, `python3`, `jq`, and `ansible-playbook`, and runs `make deps`.
+
+None of this touches the GPU host. A missing tool here is a two-minute fix, and
+the phase exists so you find out now rather than halfway through a bring-up.
 
 ### Phase 1 — target
 

@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # T6.3 — `skill-install` binds the correct absolute repo path.
+# T6.7 — the skill still resolves a repository when nothing bound one.
 #
 # The installed skill runs from the agent's skill directory, so a relative path
 # to the playbooks would resolve against the wrong tree. The install substitutes
 # an absolute path; if that silently failed the skill would look correct and then
 # be unable to find anything.
+#
+# Most people never run this installer — they drop the skill directory in from a
+# tarball and let Phase 0 clone the repository. T6.7 covers that path, which is
+# the common one and the one with no substitution behind it.
 #
 # HOME is redirected to a scratch directory, so this never touches the real
 # ~/.claude, ~/.config/opencode or ~/.agents.
@@ -63,14 +68,44 @@ else
   bad "T6.3 installed copy does not contain $REPO_ROOT"
 fi
 
-# A relative path here is the bug this test exists to catch.
+# A relative path here is the bug this test exists to catch. The binding lives
+# in Phase 0's resolution snippet, as the `bound=` assignment.
 if [[ -f "$dest/SKILL.md" ]]; then
-  bound="$(grep -o 'repository is at [^ ]*' "$dest/SKILL.md" | head -n1 | awk '{print $4}' | tr -d '`')"
+  bound="$(grep -o "^bound='[^']*'" "$dest/SKILL.md" | head -n1 | sed "s/^bound='//; s/'\$//")"
   if [[ "$bound" == /* ]]; then
     ok "T6.3 the bound path is absolute"
   else
     bad "T6.3 the bound path '$bound' is not absolute"
   fi
+fi
+
+# -- T6.7: the standalone path resolves without an install -------------------
+# Most people never run skills/install.sh — they drop the skill directory in and
+# let Phase 0 clone the repo. That leaves the placeholder unsubstituted, so the
+# resolution snippet has to fall through to the default location. It is shell
+# living in a markdown file, which nothing else executes, so run it here.
+snippet="$scratch/phase0.sh"
+awk '/^bound=/, /^echo/' skills/lmstack/SKILL.md >"$snippet"
+
+if [[ -s "$snippet" ]]; then
+  ok "T6.7 extracted the Phase 0 resolution snippet"
+else
+  bad "T6.7 could not find the Phase 0 resolution snippet in SKILL.md"
+fi
+
+mkdir -p "$scratch/home/lmstack/hosts"
+got="$(HOME="$scratch/home" LMSTACK_REPO='' bash "$snippet" 2>&1)"
+if [[ "$got" == "$scratch/home/lmstack" ]]; then
+  ok "T6.7 unsubstituted skill resolves to the default clone location"
+else
+  bad "T6.7 default resolution gave '$got'"
+fi
+
+got="$(HOME="$scratch/empty-home" LMSTACK_REPO='' bash "$snippet" 2>&1)"
+if [[ "$got" == "NOT FOUND" ]]; then
+  ok "T6.7 reports NOT FOUND rather than a path that does not exist"
+else
+  bad "T6.7 with no repo anywhere gave '$got'"
 fi
 
 # -- The whole skill is installed, not just the prompt -----------------------

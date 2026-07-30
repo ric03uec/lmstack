@@ -7,19 +7,65 @@ Bring a DGX Spark, a gaming desktop, or the AMD laptop you already own. The
 default catalog is sized to come up on **8 GB of VRAM**.
 
 ```
-        control host                          GPU host
-  ┌──────────────────────┐            ┌──────────────────────────┐
-  │ pi / Claude Code /   │            │  LiteLLM  :4000          │
-  │ opencode             │ ─────────► │    ├─ engine    :8001 *  │
-  │ pi-config/           │  OpenAI    │    └─ engine    :8002 *  │
-  └──────────────────────┘   API      │  * = 127.0.0.1 only      │
-                                      └──────────────────────────┘
+              control host — where you write code
+┌─────────────────────────────────────────────────────────────┐
+│  pi   ·   Claude Code   ·   opencode                        │
+│  pi-config/ — one provider entry per host, and the same     │
+│  model alias on both, so switching is a flag not a rewrite  │
+└──────────────────────────────┬──────────────────────────────┘
+                               │  OpenAI-compatible + master key
+               ┌───────────────┴───────────────┐
+               │                               │
+┌──────────────▼──────────────┐ ┌──────────────▼──────────────┐
+│ h1-nvidia — NVIDIA + CUDA   │ │ h2-amd — AMD, or localhost  │
+├─────────────────────────────┤ ├─────────────────────────────┤
+│  LiteLLM             :4000  │ │  LiteLLM             :4000  │
+│    routing · keys · usage   │ │    routing · keys · usage   │
+│       │                     │ │       │                     │
+│  ┌────▼──────────────────┐  │ │  ┌────▼──────────────────┐  │
+│  │ vLLM           :8001  │  │ │  │ llama.cpp      :8001  │  │
+│  │ qwen2.5-coder-7b      │  │ │  │ qwen2.5-coder-7b      │  │
+│  │ CUDA · AWQ 4-bit      │  │ │  │ Vulkan · GGUF Q4_K_M  │  │
+│  └───────────────────────┘  │ │  └───────────────────────┘  │
+│                             │ │                             │
+│  Postgres — no ports at all │ │  Postgres — no ports at all │
+└─────────────────────────────┘ └─────────────────────────────┘
 ```
 
-Only the gateway is reachable off-box. The engines bind loopback, and a test
-enforces it rather than a comment promising it.
+Only `:4000` leaves either box. The engines and Postgres bind loopback, and a
+test fails the build if a template ever stops doing that. A second active model
+is a second engine container, on `:8002`.
 
 ## Quickstart
+
+Paste this at your coding agent — Claude Code, opencode, or pi:
+
+> install the lmstack skill from https://ric03uec.github.io/lmstack/install
+
+That page is written for the agent to read: it says where the skill goes and how
+to fetch it. Then ask for a starting point:
+
+> use the lmstack skill to give me a starting point
+
+The skill asks which host to target, probes its hardware, picks a model that
+fits the VRAM it found, shows you every file it wants to write, and runs the
+playbooks. **You do not need to clone this repository first** — it does that
+itself, after asking where to put it.
+
+### Install the skill yourself
+
+One command, no clone. Pick the directory your agent reads from:
+
+```bash
+DEST=~/.claude/skills   # opencode: ~/.config/opencode/skills · pi: ~/.agents/skills
+mkdir -p "$DEST"
+curl -fsSL https://github.com/ric03uec/lmstack/archive/refs/heads/main.tar.gz \
+  | tar -xz -C "$DEST" --strip-components=2 lmstack-main/skills/lmstack
+```
+
+### Work from a clone instead
+
+If you want to change lmstack rather than use it:
 
 ```bash
 git clone https://github.com/ric03uec/lmstack && cd lmstack
@@ -27,17 +73,10 @@ make skill-install                 # every agent directory you have
 make skill-install AGENT=claude    # or just one: claude | opencode | pi
 ```
 
-Then ask your agent:
-
-> use the lmstack skill to give me a starting point
-
-The skill asks which host to target, probes its hardware, picks a model that
-fits the VRAM it found, shows you every file it wants to write, and runs the
-playbooks. It is the supported path. `make up HOST=...` is the same thing
+This binds the clone's absolute path into the installed skill, so it works
+against your edits rather than cloning a second copy. Moving or renaming the
+clone means re-running it. `make up HOST=...` is the same work as the skill,
 without the conversation.
-
-The install binds this repository's absolute path into the skill, so moving or
-renaming the clone means re-running it.
 
 Once a host is up, point your editor at it:
 
