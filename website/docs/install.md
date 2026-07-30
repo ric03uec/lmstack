@@ -5,104 +5,104 @@ title: Install the skill
 
 # Install the skill
 
-This page is written to be read by a coding agent. If you are a person, the
-short version is: paste the line below at your agent and it will do the rest.
+This page is addressed to a coding agent. If you are a person: type
+*install the lmstack skill from https://ric03uec.github.io/lmstack/install*
+in Claude Code, opencode, or pi, and your agent will do what follows.
 
-> install the lmstack skill from https://ric03uec.github.io/lmstack/install
+---
 
-You do not need to clone anything first. The skill clones the repository itself,
-after asking you where to put it.
+## What you are installing
 
-## Instructions for the agent
+The lmstack skill: a directory containing `SKILL.md`, a `scripts/` folder, and a
+`references/` folder. About 100 KB. Nothing compiles, nothing executes at
+install time, and it adds no dependencies to the machine.
 
-The lmstack skill is a directory — `SKILL.md` plus `scripts/` and
-`references/`. Installing it means putting that directory where the agent looks
-for skills. Nothing is compiled, nothing runs at install time.
+The source is the `skills/lmstack` directory of
+[github.com/ric03uec/lmstack](https://github.com/ric03uec/lmstack). Take the
+whole directory, not just `SKILL.md` — the skill reads the other files while it
+works, and a copy missing them fails halfway through a host bring-up.
 
-### 1. Pick the directory
+## Where it goes
 
-| Agent | Skills directory |
+Install into the skills directory of the agent you are running inside:
+
+| If you are | Install into |
 |---|---|
-| Claude Code | `~/.claude/skills` |
-| opencode | `~/.config/opencode/skills` |
-| pi | `~/.agents/skills` |
+| Claude Code | `~/.claude/skills/lmstack` |
+| opencode | `~/.config/opencode/skills/lmstack` |
+| pi | `~/.agents/skills/lmstack` |
 
-Install into the one the user actually runs. If more than one exists, ask rather
-than installing into all of them.
+If more than one of those directories exists, that does not mean the user runs
+more than one agent. Install into your own and say so. If you genuinely cannot
+tell which you are, ask rather than installing into all three.
 
-### 2. Fetch it
+## How to get it
 
-This pulls only the skill directory out of the repository tarball — no clone, no
-`git` on the user's machine, about 100 KB:
+Do not clone the repository. The skill clones it later, at a location the user
+chooses, and a clone made now would be in the wrong place and unused.
 
-```bash
-DEST=~/.claude/skills          # from the table above
-mkdir -p "$DEST"
-curl -fsSL https://github.com/ric03uec/lmstack/archive/refs/heads/main.tar.gz \
-  | tar -xz -C "$DEST" --strip-components=2 lmstack-main/skills/lmstack
-```
+Fetch the repository archive at
+`https://github.com/ric03uec/lmstack/archive/refs/heads/main.tar.gz` and extract
+only the `lmstack-main/skills/lmstack` path from it into the directory above,
+dropping the two leading path components so the result is `lmstack/` and not
+`lmstack-main/skills/lmstack/`.
 
-Re-running it overwrites the previous copy, which is how you upgrade.
+Use whatever tool you have. If `curl` and `tar` are both present, one pipeline
+does it; if the environment blocks outbound network access, say so and stop
+rather than trying alternative hosts or mirrors.
 
-### 3. Check it landed
+Extracting again over the top is how the skill is upgraded, so a directory that
+already exists is not an error.
 
-```bash
-ls ~/.claude/skills/lmstack     # SKILL.md, references, scripts
-```
+## Confirm it worked
 
-Four files matter: `SKILL.md`, `scripts/probe-host.sh`, `scripts/classify.py`,
-and `scripts/stacklog.sh`. If `SKILL.md` is missing, the extraction failed —
-report the error rather than retrying with different flags.
+The installed directory must contain `SKILL.md`, `scripts/probe-host.sh`,
+`scripts/classify.py`, `scripts/stacklog.sh`, and a `references/` folder with
+four markdown files.
 
-### 4. Hand back to the user
+If `SKILL.md` is missing, the extraction failed. Report the actual error. Do not
+retry with different flags, and do not reconstruct the skill by hand from this
+page — a hand-written `SKILL.md` will be missing the rules that stop it doing
+damage on the user's machine.
 
-Tell them to start with:
+## Then stop
+
+Tell the user the skill is installed and that they can start it with:
 
 > use the lmstack skill to give me a starting point
 
-Do not start the install yourself unless they ask. The skill's first phase asks
-where to clone the repository, and that is their decision.
+Do not begin the installation yourself unless they ask. The skill's first
+question is where to clone the repository, and that is theirs to answer.
 
-## What the skill does first
+## What the skill does when it starts
 
-Its Phase 0 finds the repository, or clones it. The resolution order is:
+Its Phase 0 looks for the lmstack repository in `$LMSTACK_REPO`, then at a path
+bound at install time if it was installed from a clone, then at `~/lmstack`. If
+none exist it asks where to clone and runs one `git clone`.
 
-1. `$LMSTACK_REPO`, if the user exported one.
-2. A path bound at install time, if it was installed from a clone.
-3. `~/lmstack`, the default.
+That is the only git command in the skill. It will not stage, commit, checkout,
+or stash anything, in any repository, at any point.
 
-If none of those exist it asks where to clone, then runs one `git clone`. That
-is the only git command in the whole skill — it will not stage, commit, or
-checkout anything, on any repository, ever.
+It then checks the control host has `make`, `python3`, `jq`, and
+`ansible-playbook`. The last is the one usually missing; it is installed with
+`uv tool install ansible-core`, not pipx and not the system package manager.
 
-After that it checks the control host has `make`, `python3`, `jq`, and
-`ansible-playbook`. Install the last one with `uv tool install ansible-core`.
-
-See [The skill](skill) for what happens in the remaining phases, and what it
-will refuse to do.
+[The skill](skill) describes the remaining phases and what it refuses to do.
 
 ## Installing from a clone instead
 
-If you are working on lmstack rather than just using it, install from the clone
-so that edits to `skills/lmstack/` take effect on the next run:
+For someone changing lmstack rather than using it. Clone the repository and run
+`make skill-install`, optionally with `AGENT=claude`, `AGENT=opencode`, or
+`AGENT=pi` to restrict it to one. `make skill-list` prints where it would write
+without writing anything.
 
-```bash
-git clone https://github.com/ric03uec/lmstack && cd lmstack
-make skill-install                 # every agent directory you have
-make skill-install AGENT=claude    # or one of claude | opencode | pi
-make skill-list                    # show where it would write, without writing
-```
-
-This substitutes the clone's absolute path into the installed `SKILL.md`, so
-Phase 0 resolves to it without asking. Moving or renaming the clone means
-running the install again.
+That install substitutes the clone's absolute path into the copy it writes, so
+Phase 0 resolves to that clone and the skill runs against local edits rather
+than fetching its own copy. Moving or renaming the clone breaks the binding, and
+the fix is to run the install again.
 
 ## Uninstalling
 
-```bash
-rm -rf ~/.claude/skills/lmstack
-```
-
-That leaves the clone and anything running on your GPU hosts alone. There is no
-`make down`: stop a stack on the host it runs on, with
-`docker compose -f ~/.lmstack/docker-compose.yml down`.
+Delete the `lmstack` directory from the agent's skills directory. That leaves
+the clone and anything running on the GPU hosts alone — a stack is stopped on
+the host it runs on, with `docker compose -f ~/.lmstack/docker-compose.yml down`.
