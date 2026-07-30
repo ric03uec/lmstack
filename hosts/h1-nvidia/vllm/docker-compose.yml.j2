@@ -1,0 +1,114 @@
+---
+# Rendered by hosts/h1-nvidia/ansible/10-stack.yml. Do not edit the copy that
+# lands in the install root; edit this template and re-run `make up`.
+#
+# Inputs:
+#   models                 list of parsed vllm/models/<slug>.yml
+#   install_root           user-space root on the target host
+#   litellm_image          pinned gateway image
+#   litellm_port           externally published gateway port
+#   litellm_bind_address   0.0.0.0, or a Tailscale IP to stay off the LAN
+#
+# Exposure invariant: engines publish on 127.0.0.1 only and talk to LiteLLM over
+# the compose network. Postgres publishes nothing. Tests T1.3, T1.4 and T3.8
+# enforce this; it is not a convention.
+services:
+{% for m in models %}
+  vllm-{{ m.slug }}:
+    container_name: vllm-{{ m.slug }}
+    image: {{ m.image }}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:{{ m.port }}:8000"
+    volumes:
+      - {{ install_root }}/hf-cache:/root/.cache/huggingface
+      - {{ install_root }}/chat-templates:/chat-templates:ro
+    env_file:
+      - {{ install_root }}/env/stack.env
+{% if m.environment is defined and m.environment %}
+    environment:
+{% for k, v in m.environment.items() %}
+      {{ k }}: "{{ v }}"
+{% endfor %}
+{% endif %}
+    # vLLM's tensor-parallel workers exchange tensors over /dev/shm. The 64 MB
+    # docker default deadlocks them on anything but a single small model.
+    shm_size: "16g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command:
+      - vllm
+      - serve
+      - "{{ m.hf_model }}"
+      - --host
+      - "0.0.0.0"
+      - --gpu-memory-utilization
+      - "{{ m.gpu_memory_utilization }}"
+      - --max-model-len
+      - "{{ m.max_model_len }}"
+      - --max-num-seqs
+      - "{{ m.max_num_seqs }}"
+      - --dtype
+      - "{{ m.dtype }}"
+{% for arg in m.extra_args | default([]) %}
+      - "{{ arg }}"
+{% endfor %}
+{% if m.chat_template_file is defined %}
+      - --chat-template
+      - /chat-templates/{{ m.chat_template_file }}
+{% endif %}
+
+{% endfor %}
+  postgres:
+    container_name: litellm-postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # No `ports:` here on purpose. LiteLLM reaches it over the compose network;
+    # nothing outside needs to.
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: "${LITELLM_DB_PASSWORD}"
+      POSTGRES_DB: litellm
+    volumes:
+      - litellm-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  litellm:
+    container_name: litellm
+    image: {{ litellm_image }}
+    restart: unless-stopped
+    ports:
+      - "{{ litellm_bind_address }}:{{ litellm_port }}:4000"
+    # Lets model_list entries reach host-side services (an existing ollama, say)
+    # without hard-coding the bridge IP.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - {{ install_root }}/litellm/config.yaml:/app/config.yaml:ro
+    env_file:
+      - {{ install_root }}/env/stack.env
+    environment:
+      DATABASE_URL: "postgresql://litellm:${LITELLM_DB_PASSWORD}@postgres:5432/litellm"
+      STORE_MODEL_IN_DB: "True"
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+{% for m in models %}
+      vllm-{{ m.slug }}:
+        condition: service_started
+{% endfor %}
+
+volumes:
+  litellm-postgres-data:
+    name: litellm-postgres-data

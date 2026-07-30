@@ -1,0 +1,171 @@
+---
+# Endpoint conformance for h1-nvidia. Proves the stack is not merely running
+# but actually usable by an agent.
+#
+#   make verify HOST=h1-nvidia
+#
+# Covers T3.2 (aliases), T3.3 (completions), T3.4 (tool calls), T3.5
+# (streaming), T3.6 (long context) and T3.7 (auth).
+#
+# Requests go through curl rather than ansible.builtin.uri: the uri module's
+# Authorization handling returned spurious 401s against LiteLLM on the source
+# deployment, which is indistinguishable from a real auth failure and cost an
+# afternoon. The master key is read inside each shell snippet straight from
+# stack.env, so it never becomes an Ansible variable and cannot leak into -vvv
+# output or a callback plugin.
+
+- name: Verify the lmstack endpoint on h1-nvidia
+  hosts: h1-nvidia
+  become: false
+  gather_facts: true
+
+  vars_files:
+    - vars.yml
+
+  vars:
+    engine_root: "{{ playbook_dir }}/../vllm"
+    base_url: "http://127.0.0.1:{{ litellm_port }}"
+    key_cmd: >-
+      KEY=$(awk -F= '/^LITELLM_MASTER_KEY=/ {print substr($0, index($0,"=")+1); exit}'
+      {{ install_root }}/env/stack.env)
+
+  tasks:
+    - name: Load model definitions for the active set
+      ansible.builtin.set_fact:
+        models: >-
+          {{ models | default([])
+             + [lookup('file', engine_root ~ '/models/' ~ item ~ '.yml') | from_yaml] }}
+      loop: "{{ active_models }}"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Compute the aliases this host should be serving
+      ansible.builtin.set_fact:
+        expected_aliases: >-
+          {{ (models | map(attribute='slug') | list)
+             + (models | map(attribute='virtual_models') | flatten | map(attribute='name') | list)
+             | unique | sort }}
+
+    # -- T3.2 -----------------------------------------------------------------
+    - name: Fetch the served model list
+      ansible.builtin.shell: |
+        set -euo pipefail
+        {{ key_cmd }}
+        curl -sfS -m 30 -H "Authorization: Bearer $KEY" {{ base_url }}/v1/models
+      register: models_response
+      changed_when: false
+
+    - name: T3.2 — served aliases match the model definitions exactly
+      ansible.builtin.assert:
+        that:
+          - (models_response.stdout | from_json).data | map(attribute='id') | sort == expected_aliases
+        fail_msg: >-
+          Expected {{ expected_aliases }} but the gateway serves
+          {{ (models_response.stdout | from_json).data | map(attribute='id') | sort }}.
+          A missing alias usually means two model files declared the same name and
+          LiteLLM silently kept one.
+        success_msg: "Serving {{ expected_aliases | length }} alias(es): {{ expected_aliases | join(', ') }}"
+
+    # -- T3.3 -----------------------------------------------------------------
+    - name: T3.3 — every alias returns a non-empty completion
+      ansible.builtin.shell: |
+        set -euo pipefail
+        {{ key_cmd }}
+        body=$(jq -nc --arg m "{{ item }}" \
+          '{model:$m, messages:[{role:"user",content:"Reply with the single word: pong"}], max_tokens:16}')
+        content=$(curl -sfS -m 180 \
+          -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+          -d "$body" {{ base_url }}/v1/chat/completions \
+          | jq -r '.choices[0].message.content // ""')
+        [ -n "$content" ] || { echo "empty completion for {{ item }}" >&2; exit 1; }
+      loop: "{{ expected_aliases }}"
+      changed_when: false
+
+    # -- T3.4 -----------------------------------------------------------------
+    # The single most common real-world failure: without a matching
+    # --tool-call-parser the model emits the call as prose inside
+    # message.content, every agent loop breaks, and nothing logs an error.
+    - name: T3.4 — a request with tools returns tool_calls, not prose
+      ansible.builtin.shell: |
+        set -euo pipefail
+        {{ key_cmd }}
+        body=$(jq -nc --arg m "{{ models[0].slug }}" '{
+          model: $m,
+          messages: [{role:"user", content:"What is the weather in Paris? Use the tool."}],
+          tools: [{
+            type: "function",
+            function: {
+              name: "get_weather",
+              description: "Get the current weather for a city",
+              parameters: {
+                type: "object",
+                properties: {city: {type: "string", description: "City name"}},
+                required: ["city"]
+              }
+            }
+          }],
+          tool_choice: "auto",
+          max_tokens: 128
+        }')
+        response=$(curl -sfS -m 180 \
+          -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+          -d "$body" {{ base_url }}/v1/chat/completions)
+        name=$(jq -r '.choices[0].message.tool_calls[0].function.name // ""' <<<"$response")
+        if [ "$name" != "get_weather" ]; then
+          echo "no structured tool call; the model replied in prose." >&2
+          echo "check --tool-call-parser in the model YAML extra_args." >&2
+          jq -r '.choices[0].message.content // ""' <<<"$response" >&2
+          exit 1
+        fi
+      changed_when: false
+
+    # -- T3.5 -----------------------------------------------------------------
+    - name: T3.5 — streaming yields deltas and terminates
+      ansible.builtin.shell: |
+        set -euo pipefail
+        {{ key_cmd }}
+        body=$(jq -nc --arg m "{{ models[0].slug }}" \
+          '{model:$m, messages:[{role:"user",content:"Count to five."}], max_tokens:64, stream:true}')
+        stream=$(curl -sfS -m 180 -N \
+          -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+          -d "$body" {{ base_url }}/v1/chat/completions)
+        grep -q '"delta"' <<<"$stream" || { echo "no delta frames in stream" >&2; exit 1; }
+        grep -q 'data: \[DONE\]' <<<"$stream" || { echo "stream never terminated" >&2; exit 1; }
+      changed_when: false
+
+    # -- T3.6 -----------------------------------------------------------------
+    - name: T3.6 — a prompt near max_model_len is accepted
+      ansible.builtin.shell: |
+        set -euo pipefail
+        {{ key_cmd }}
+        # ~0.75 tokens per word for this tokenizer; stay under 90% of the window.
+        words=$(( {{ models[0].max_model_len }} * 90 / 100 * 3 / 4 ))
+        filler=$(yes "lorem" | head -n "$words" | tr '\n' ' ')
+        body=$(jq -nc --arg m "{{ models[0].slug }}" --arg p "$filler Reply with: ok" \
+          '{model:$m, messages:[{role:"user",content:$p}], max_tokens:8}')
+        curl -sfS -m 300 \
+          -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+          -d "$body" {{ base_url }}/v1/chat/completions >/dev/null
+      changed_when: false
+
+    # -- T3.7 -----------------------------------------------------------------
+    - name: T3.7 — a wrong bearer token is rejected
+      ansible.builtin.shell: |
+        set -euo pipefail
+        code=$(curl -s -o /dev/null -w '%{http_code}' -m 30 \
+          -H "Authorization: Bearer sk-definitely-not-the-master-key" \
+          -H 'Content-Type: application/json' \
+          -d '{"model":"{{ models[0].slug }}","messages":[{"role":"user","content":"hi"}]}' \
+          {{ base_url }}/v1/chat/completions)
+        case "$code" in
+          401|403) : ;;
+          *) echo "expected 401/403 for a bad key, got $code — auth is not enforced" >&2; exit 1 ;;
+        esac
+      changed_when: false
+
+    - name: Verification summary
+      ansible.builtin.debug:
+        msg:
+          - "All endpoint checks passed on {{ host_alias }}."
+          - "Aliases:  {{ expected_aliases | join(', ') }}"
+          - "Endpoint: http://{{ ansible_default_ipv4.address | default(inventory_hostname) }}:{{ litellm_port }}"

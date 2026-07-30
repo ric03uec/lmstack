@@ -221,6 +221,11 @@ __marimo__/
 # lmstack
 # =============================================================================
 
+# The Python template above ignores `env/` wholesale (virtualenvs). Git does not
+# descend into an excluded directory, so no negation inside one can rescue a
+# file — the directory itself has to be re-included first.
+!hosts/*/*/env/
+
 # Secrets: real env files never leave the host. Only *.example is tracked.
 **/env/*.env
 !**/env/*.env.example

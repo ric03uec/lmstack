@@ -78,6 +78,39 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Secret hygiene. The Python section of .gitignore ignores `env/` for
+# virtualenvs, which silently swallowed every host's env directory — templates
+# and all. The inverse mistake is worse, so both directions are checked.
+section "secret hygiene"
+mapfile -t env_examples < <(find hosts -path '*/env/*.env.example' 2>/dev/null | sort)
+
+if [[ ${#env_examples[@]} -eq 0 ]]; then
+  ok "no env templates yet"
+else
+  for example in "${env_examples[@]}"; do
+    if git check-ignore -q "$example"; then
+      bad "$example is gitignored — it is a template and must be tracked"
+    else
+      ok "$example is tracked"
+    fi
+
+    real="${example%.example}"
+    if git check-ignore -q "$real"; then
+      ok "$(basename "$real") alongside it would be ignored"
+    else
+      bad "$real is NOT ignored — a real secret file could be committed"
+    fi
+  done
+fi
+
+mapfile -t tracked_env < <(git ls-files '*.env' | sort)
+if [[ ${#tracked_env[@]} -eq 0 ]]; then
+  ok "no .env files tracked"
+else
+  bad "tracked .env files: ${tracked_env[*]}"
+fi
+
+# ---------------------------------------------------------------------------
 if [[ ${#skipped[@]} -gt 0 ]]; then
   printf '\n\033[33mSkipped checks. To run the full suite:\033[0m\n'
   printf '  %s\n' "${skipped[@]}"

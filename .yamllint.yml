@@ -3,6 +3,8 @@ extends: default
 
 ignore: |
   website/
+  # Rendered artifacts. Their style is the template's business, not yamllint's.
+  tests/golden/
   node_modules/
   .stacklog/
 

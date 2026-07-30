@@ -1,0 +1,10 @@
+---
+# Ansible collections the playbooks need. Installed on the control machine,
+# not on the target host.
+#
+#   make deps
+collections:
+  - name: community.docker
+    version: ">=3.4.0"
+  - name: community.general
+    version: ">=8.0.0"

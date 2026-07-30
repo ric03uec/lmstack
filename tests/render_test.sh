@@ -20,6 +20,10 @@ RENDER_DIR="tests/.render"
 GOLDEN_DIR="tests/golden"
 BLESS="${BLESS:-0}"
 
+# The install root the templates render against. Fictional and fixed, so golden
+# files are byte-identical on every machine. Must match tests/render.yml.
+FIXTURE_ROOT="/home/lmstack/.lmstack"
+
 rc=0
 section() { printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
 ok()      { printf '  \033[32mPASS\033[0m %s\n' "$1"; }
@@ -62,16 +66,28 @@ for host in "${hosts[@]}"; do
   ok "templates rendered"
 
   # -- T1.1 -----------------------------------------------------------------
+  # `docker compose config` insists every env_file exists, and the rendered
+  # paths point at a fictional install root so the golden files stay identical
+  # on every machine. Redirect those paths into the scratch dir for validation
+  # only — T1.1 is checking structure, not where the bind mounts live.
   compose="$RENDER_DIR/$host/docker-compose.yml"
   if [[ ! -f "$compose" ]]; then
     bad "T1.1 no docker-compose.yml rendered"
   elif ! command -v docker >/dev/null 2>&1; then
     skip "T1.1 docker not installed"
-  elif docker compose -f "$compose" config -q 2>"$out"; then
-    ok "T1.1 compose file is valid"
   else
-    bad "T1.1 compose file rejected by docker compose"
-    sed 's/^/        /' "$out"
+    mkdir -p "$scratch/root/env"
+    printf 'HF_TOKEN=%s\nLITELLM_MASTER_KEY=%s\nLITELLM_DB_PASSWORD=%s\n' \
+      render-fixture render-fixture render-fixture >"$scratch/root/env/stack.env"
+    sed "s|$FIXTURE_ROOT|$scratch/root|g" "$compose" >"$scratch/compose.yml"
+
+    if docker compose -f "$scratch/compose.yml" \
+        --env-file "$scratch/root/env/stack.env" config -q 2>"$out"; then
+      ok "T1.1 compose file is valid"
+    else
+      bad "T1.1 compose file rejected by docker compose"
+      sed 's/^/        /' "$out"
+    fi
   fi
 
   # -- T1.3 / T1.4 / T1.5 ---------------------------------------------------

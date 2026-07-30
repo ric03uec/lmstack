@@ -4,11 +4,13 @@
 # starting point. These targets are the explicit path underneath.
 #
 # Targets arrive with their implementation, one phase at a time (see PLAN.md).
-# Host lifecycle lands in Phase 1, skill-install in Phase 3, pi-install in
-# Phase 4, docs in Phase 5.
+# skill-install lands in Phase 3, pi-install in Phase 4, docs in Phase 5.
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
+
+INVENTORY := inventory/hosts.ini
+ANSIBLE   := ansible-playbook -i $(INVENTORY)
 
 .PHONY: help
 help: ## Show this help
@@ -16,6 +18,8 @@ help: ## Show this help
 	@echo ""
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Host targets need HOST=, e.g.  make up HOST=h1-nvidia"
 
 # ---------------------------------------------------------------------------
 # Tests — none of these need a host or a GPU
@@ -43,6 +47,47 @@ render-test: ## Render every host's templates and assert the invariants (T1)
 .PHONY: lint
 lint: ## yamllint, shellcheck, ansible-lint, playbook syntax (T0.1, T0.2)
 	@./tests/lint.sh
+
+# ---------------------------------------------------------------------------
+# Host lifecycle
+# ---------------------------------------------------------------------------
+
+.PHONY: guard-host
+guard-host:
+	@if [ -z "$(HOST)" ]; then \
+		echo "error: HOST is required, e.g. make $(MAKECMDGOALS) HOST=h1-nvidia"; \
+		echo "available:"; ls -1 hosts | sed 's/^/  /'; exit 1; \
+	fi
+	@if [ ! -d "hosts/$(HOST)" ]; then \
+		echo "error: no such host 'hosts/$(HOST)'"; exit 1; \
+	fi
+	@if [ ! -f "$(INVENTORY)" ]; then \
+		echo "error: $(INVENTORY) not found — cp inventory/hosts.ini.example $(INVENTORY)"; exit 1; \
+	fi
+
+.PHONY: deps
+deps: ## Install the Ansible collections the playbooks need
+	@ansible-galaxy collection install -r requirements.yml
+
+.PHONY: bootstrap
+bootstrap: guard-host ## Install Docker + GPU runtime + firewall on HOST
+	$(ANSIBLE) hosts/$(HOST)/ansible/00-bootstrap.yml -l $(HOST)
+
+.PHONY: up
+up: validate guard-host ## Render, pull, start, and health-gate the stack on HOST
+	$(ANSIBLE) hosts/$(HOST)/ansible/10-stack.yml -l $(HOST)
+
+.PHONY: verify
+verify: guard-host ## Run the endpoint conformance suite against HOST
+	$(ANSIBLE) hosts/$(HOST)/ansible/20-verify.yml -l $(HOST)
+
+.PHONY: site
+site: validate guard-host ## bootstrap + up + verify in one run
+	$(ANSIBLE) hosts/$(HOST)/ansible/site.yml -l $(HOST)
+
+.PHONY: check
+check: guard-host ## Dry-run the full playbook against HOST (--check --diff)
+	$(ANSIBLE) hosts/$(HOST)/ansible/site.yml -l $(HOST) --check --diff
 
 # ---------------------------------------------------------------------------
 # Observability

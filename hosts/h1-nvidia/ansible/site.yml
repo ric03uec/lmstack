@@ -1,0 +1,16 @@
+---
+# Everything, in order: prepare the host, bring the stack up, prove it works.
+#
+#   make site HOST=h1-nvidia
+#
+# Safe to re-run. Bootstrap is idempotent, the stack converges, and verify is
+# read-only.
+
+- name: Import bootstrap
+  ansible.builtin.import_playbook: 00-bootstrap.yml
+
+- name: Import stack
+  ansible.builtin.import_playbook: 10-stack.yml
+
+- name: Import verify
+  ansible.builtin.import_playbook: 20-verify.yml

@@ -87,7 +87,7 @@ Implementation is phased. [PLAN.md](PLAN.md) holds the full design and test
 matrix.
 
 - [x] Phase 0 — model contract, validator, `.stacklog` writer, offline tests
-- [ ] Phase 1 — `h1-nvidia` playbooks
+- [x] Phase 1 — `h1-nvidia` playbooks
 - [ ] Phase 2 — `h2-amd` playbooks
 - [ ] Phase 3 — the skill
 - [ ] Phase 4 — `pi-config` and agent bridges
