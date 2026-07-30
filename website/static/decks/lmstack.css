@@ -1,0 +1,107 @@
+/* Shared Reveal.js theme for lmstack decks. Palette tracks the docs site
+   (see website/src/css/custom.css). Monospace-forward on purpose — this is
+   a dev-tool deck, not a keynote. */
+
+:root {
+  --lm-bg: #090c0c;
+  --lm-fg: #e7edf3;
+  --lm-muted: #8a9199;
+  --lm-accent: #7dcfff;
+  --lm-accent-dim: #2d6f88;
+  --lm-rule: #1e2528;
+}
+
+.reveal-viewport { background: var(--lm-bg); }
+
+.reveal {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--lm-fg);
+  font-weight: 400;
+}
+
+.reveal .slides { text-align: left; }
+
+.reveal h1, .reveal h2, .reveal h3 {
+  font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+  color: var(--lm-accent);
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+}
+.reveal h1 { font-size: 2.2em; }
+.reveal h2 { font-size: 1.5em; }
+.reveal h3 { font-size: 1.1em; color: var(--lm-fg); }
+
+.reveal p, .reveal li { line-height: 1.5; }
+.reveal ul, .reveal ol { margin: 0.4em 0 0.4em 1.2em; }
+.reveal li { margin: 0.35em 0; }
+
+.reveal a {
+  color: var(--lm-accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--lm-accent-dim);
+}
+.reveal strong { color: var(--lm-accent); font-weight: 600; }
+.reveal em { color: var(--lm-muted); font-style: normal; }
+
+.reveal pre {
+  background: #0d1113;
+  border: 1px solid var(--lm-rule);
+  border-radius: 4px;
+  font-size: 0.5em;
+  box-shadow: none;
+  width: 100%;
+  margin: 0.6em 0;
+}
+.reveal pre code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  padding: 1em 1.2em;
+  color: var(--lm-fg);
+  white-space: pre;
+  max-height: none;
+}
+.reveal code { font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--lm-accent); }
+
+.reveal blockquote {
+  border-left: 3px solid var(--lm-accent-dim);
+  background: transparent;
+  color: var(--lm-muted);
+  padding: 0.2em 0.9em;
+  box-shadow: none;
+  font-style: normal;
+}
+
+.reveal .subtitle {
+  color: var(--lm-muted);
+  font-size: 0.85em;
+  margin-top: -0.4em;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Title slide: center everything. */
+.reveal section.title { text-align: center; }
+.reveal section.title h1 { font-size: 3.2em; margin-bottom: 0.15em; }
+.reveal section.title h2 {
+  color: var(--lm-fg);
+  font-size: 1.1em;
+  font-weight: 400;
+  font-family: 'Inter', system-ui, sans-serif;
+  margin-bottom: 1.5em;
+}
+.reveal section.title .subtitle { font-size: 0.9em; }
+
+/* Closer: QR + links, centered. */
+.reveal section.closer { text-align: center; }
+.reveal section.closer img { max-height: 320px; margin: 0.4em 0; background: #fff; padding: 0.6em; border-radius: 6px; }
+.reveal section.closer .links { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.7em; color: var(--lm-muted); }
+.reveal section.closer .links a { color: var(--lm-accent); border: none; }
+
+/* The stack diagrams on slides 2 and 3 are the whole point of those slides;
+   let the code block sit larger than the default. */
+.reveal section.stack pre { font-size: 0.6em; }
+.reveal section.stack pre code { padding: 1.2em 1.4em; }
+
+.reveal .progress { color: var(--lm-accent); }
+.reveal .controls { color: var(--lm-accent-dim); }
+.reveal .slide-number { color: var(--lm-muted); background: transparent; font-family: 'JetBrains Mono', ui-monospace, monospace; }
