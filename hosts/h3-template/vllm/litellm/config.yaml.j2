@@ -1,0 +1,47 @@
+---
+# Rendered by this host's ansible/10-stack.yml.
+#
+# One model_list entry per virtual model, so a single loaded backbone can serve
+# several OpenAI aliases that differ only in request-time parameters.
+#
+# api_base points at the compose service name, not at the published loopback
+# port: the gateway reaches engines over the internal network, which is why
+# publishing them on 127.0.0.1 costs nothing.
+#
+# Whitespace: rendered with trim_blocks=True, so plain control tags already eat
+# their trailing newline. Do NOT add the leading-minus stripping marker — the
+# list items collapse onto one line and LiteLLM silently serves fewer aliases
+# than you declared. T1.5 exists because that happened.
+model_list:
+{% for m in models %}
+{% for vm in m.virtual_models %}
+  - model_name: {{ vm.name }}
+    model_info:
+      max_input_tokens: {{ m.max_model_len }}
+    litellm_params:
+      model: openai/{{ m.hf_model }}
+      api_base: http://vllm-{{ m.slug }}:8000/v1
+      api_key: dummy
+{% if vm.chat_template_kwargs is defined and vm.chat_template_kwargs %}
+      extra_body:
+        chat_template_kwargs:
+{% for k, v in vm.chat_template_kwargs.items() %}
+          {{ k }}: {{ v | tojson }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+litellm_settings:
+  # Silently drop parameters the upstream does not implement. pi sends
+  # reasoning_effort on every request; vLLM handles reasoning server-side via
+  # --reasoning-parser and rejects the OpenAI-format parameter. Without this,
+  # every pi request comes back 400 UnsupportedParamsError.
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  store_model_in_db: true
+  # Off by default: this writes full prompt and completion text to Postgres.
+  # Set litellm_store_prompts: true in vars.yml only if you want that history.
+  store_prompts_in_spend_logs: {{ litellm_store_prompts | ternary('true', 'false') }}

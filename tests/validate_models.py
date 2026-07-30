@@ -77,11 +77,20 @@ def load_yaml(path: Path) -> dict:
     return data
 
 
+def is_template(host_dir: Path) -> bool:
+    """A skeleton to copy, not a host. Placeholders would fail every check."""
+    return host_dir.name.endswith("-template")
+
+
 def discover_hosts(root: Path) -> list[Path]:
     hosts_dir = root / "hosts"
     if not hosts_dir.is_dir():
         return []
-    return sorted(p for p in hosts_dir.iterdir() if (p / "ansible" / "vars.yml").is_file())
+    return sorted(
+        p
+        for p in hosts_dir.iterdir()
+        if (p / "ansible" / "vars.yml").is_file() and not is_template(p)
+    )
 
 
 def validate_model(path: Path, rep: Report) -> dict | None:

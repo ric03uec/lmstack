@@ -1,0 +1,175 @@
+---
+# Prepares an NVIDIA host to run containers on the GPU. Run once per host.
+#
+#   make bootstrap HOST=CHANGE_ME_HOST
+#
+# Assumes the NVIDIA *driver* is already installed — that is a reboot-and-pray
+# operation tied to your distro's kernel, and doing it behind someone's back is
+# not a favour. Everything above the driver is installed here: Docker, the
+# container toolkit, the runtime wiring, and the one firewall rule.
+#
+# The play runs unprivileged so that facts (notably ansible_user_id) describe
+# the real user; root is escalated to only inside the `Install system
+# prerequisites` block. 10-stack.yml and 20-verify.yml need no root at all.
+
+- name: Bootstrap NVIDIA GPU host for lmstack
+  hosts: CHANGE_ME_HOST
+  become: false
+  gather_facts: true
+
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Verify the NVIDIA driver is present
+      ansible.builtin.command: nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
+      register: nvidia_smi
+      changed_when: false
+
+    - name: Report detected GPU
+      ansible.builtin.debug:
+        msg: "GPU: {{ nvidia_smi.stdout_lines | join(' | ') }}"
+
+    - name: Install system prerequisites
+      become: true
+      tags: sudo_required
+      block:
+        - name: Install apt prerequisites
+          ansible.builtin.apt:
+            name:
+              - ca-certificates
+              - curl
+              - gnupg
+              - jq
+            state: present
+            update_cache: true
+            cache_valid_time: 3600
+
+        - name: Create apt keyring directory
+          ansible.builtin.file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: "0755"
+
+        # -- Docker -------------------------------------------------------
+        - name: Add Docker apt key
+          ansible.builtin.get_url:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            dest: /etc/apt/keyrings/docker.asc
+            mode: "0644"
+
+        - name: Add Docker apt repository
+          ansible.builtin.apt_repository:
+            repo: >-
+              deb [arch={{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}
+              signed-by=/etc/apt/keyrings/docker.asc]
+              https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+            filename: docker
+            state: present
+
+        - name: Install Docker engine and the compose plugin
+          ansible.builtin.apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-compose-plugin
+            state: present
+            update_cache: true
+
+        # -- NVIDIA container toolkit -------------------------------------
+        - name: Add NVIDIA container toolkit apt key
+          ansible.builtin.get_url:
+            url: https://nvidia.github.io/libnvidia-container/gpgkey
+            dest: /etc/apt/keyrings/nvidia-container-toolkit.asc
+            mode: "0644"
+
+        - name: Add NVIDIA container toolkit repository
+          ansible.builtin.apt_repository:
+            repo: >-
+              deb [signed-by=/etc/apt/keyrings/nvidia-container-toolkit.asc]
+              https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /
+            filename: nvidia-container-toolkit
+            state: present
+
+        - name: Install the NVIDIA container toolkit
+          ansible.builtin.apt:
+            name: nvidia-container-toolkit
+            state: present
+            update_cache: true
+
+        - name: Read the current Docker daemon configuration
+          ansible.builtin.slurp:
+            src: /etc/docker/daemon.json
+          register: docker_daemon_json
+          failed_when: false
+
+        # nvidia-ctk rewrites daemon.json unconditionally, so gate it on the
+        # runtime already being registered. Without this, T2.1 (a second run
+        # reports changed=0) can never pass.
+        - name: Register the NVIDIA runtime with Docker
+          ansible.builtin.command: nvidia-ctk runtime configure --runtime=docker
+          when: >-
+            docker_daemon_json.content is not defined
+            or 'nvidia' not in (docker_daemon_json.content | b64decode)
+          changed_when: true
+          notify: Restart docker
+
+        - name: Ensure Docker is running and enabled
+          ansible.builtin.systemd_service:
+            name: docker
+            state: started
+            enabled: true
+
+        - name: Add the invoking user to the docker group
+          ansible.builtin.user:
+            name: "{{ ansible_user_id }}"
+            groups: docker
+            append: true
+          register: docker_group
+
+        # -- Firewall -----------------------------------------------------
+        - name: Detect UFW
+          ansible.builtin.command: which ufw
+          register: ufw_present
+          changed_when: false
+          failed_when: false
+
+        - name: Allow the LiteLLM gateway port through UFW
+          community.general.ufw:
+            rule: allow
+            port: "{{ litellm_port }}"
+            proto: tcp
+          when: ufw_present.rc == 0
+
+    - name: Apply pending Docker restart before verifying
+      ansible.builtin.meta: flush_handlers
+
+    - name: Report that a new login is needed for group membership
+      ansible.builtin.debug:
+        msg: >-
+          {{ ansible_user_id }} was added to the docker group. Ansible opens a
+          fresh connection per run, so `make up` will work; an already-open
+          interactive shell needs to log out and back in.
+      when: docker_group.changed  # noqa: no-handler
+
+    - name: Verify Docker exposes the NVIDIA runtime
+      ansible.builtin.command: docker info --format '{% raw %}{{ json .Runtimes }}{% endraw %}'
+      register: docker_runtimes
+      changed_when: false
+      failed_when: "'nvidia' not in docker_runtimes.stdout"
+
+    - name: Bootstrap summary
+      ansible.builtin.debug:
+        msg:
+          - "Host is ready for lmstack."
+          - "GPU:            {{ nvidia_smi.stdout_lines | join(' | ') }}"
+          - "Docker runtime: nvidia registered"
+          - "Next:           make up HOST={{ host_alias }}"
+
+  handlers:
+    - name: Restart docker
+      become: true
+      ansible.builtin.systemd_service:
+        name: docker
+        state: restarted

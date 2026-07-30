@@ -25,7 +25,7 @@ help: ## Show this help
 # ---------------------------------------------------------------------------
 
 .PHONY: test
-test: validate validator-test redaction-test render-test classify-test skill-install-test pi-config-test lint ## Run the full offline suite (T0, T1, T4.1, T4.6, T6.1-T6.3)
+test: validate validator-test redaction-test render-test template-test classify-test skill-install-test pi-config-test lint ## Run the full offline suite (T0, T1, T4.1, T4.6, T6.1-T6.3, T7)
 
 .PHONY: validate
 validate: ## Validate host and model configuration (T0.3-T0.13)
@@ -42,6 +42,10 @@ redaction-test: ## Prove .stacklog never records secrets (T0.12)
 .PHONY: render-test
 render-test: ## Render every host's templates and assert the invariants (T1)
 	@./tests/render_test.sh
+
+.PHONY: template-test
+template-test: ## Prove hosts/*-template still instantiates into a valid host (T7)
+	@./tests/template_test.sh
 
 .PHONY: classify-test
 classify-test: ## Classify every probe fixture and assert the verdict (T6.1, T6.2)

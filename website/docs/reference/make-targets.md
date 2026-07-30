@@ -28,6 +28,7 @@ None of these need a host, a GPU, or a network.
 | `make validator-test` | The validator *rejects* known-bad configuration. Without this, a validator that returned success unconditionally would look healthy. |
 | `make redaction-test` | Real secret shapes fed through the `.stacklog` writer do not survive. |
 | `make render-test` | Every host's templates render, and the rendered compose file still binds engines to `127.0.0.1`. |
+| `make template-test` | `hosts/*-template` still instantiates into a host the validator accepts, and has not drifted from the host it was cut from. |
 | `make classify-test` | Every hardware probe fixture produces the expected verdict. |
 | `make skill-install-test` | The skill install binds an absolute repo path. |
 | `make pi-config-test` | The pi sync copies extensions, merges rather than overwrites, and round-trips. |

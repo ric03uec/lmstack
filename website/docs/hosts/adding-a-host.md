@@ -5,7 +5,49 @@ title: Adding a host
 
 # Adding a host
 
-Two different things get called this. Decide which one you are doing.
+Three different things get called this. Decide which one you are doing.
+
+## Adding a second box of a kind you already run
+
+Another NVIDIA machine, or another AMD one, that wants its own model set and its
+own VRAM budget. Copy the template:
+
+```bash
+cp -r hosts/h3-template hosts/h3-nvidia
+grep -rn CHANGE_ME_ hosts/h3-nvidia
+```
+
+The template is shaped for vLLM on NVIDIA. For an AMD box, copy `hosts/h2-amd`
+instead — it is the same skeleton with the llama.cpp engine block, and
+everything below applies unchanged.
+
+Three placeholders, and one deliberate omission:
+
+| What | Where |
+|---|---|
+| `CHANGE_ME_HOST` | The inventory alias, in `ansible/*.yml` and the env example. Must match the directory name. |
+| `CHANGE_ME_VRAM_BUDGET_GIB` | An integer, in `ansible/vars.yml`. What the card actually has. |
+| `active_models: []` | Empty on purpose — choosing the model is the decision a template cannot make for you. |
+
+Copy a model that already works, then list its slug:
+
+```bash
+cp hosts/h1-nvidia/vllm/models/qwen2.5-coder-7b.yml hosts/h3-nvidia/vllm/models/
+```
+
+Add the host to `inventory/hosts.ini` and to the `gpu_hosts:children` group,
+then:
+
+```bash
+make validate                # your directory is now a real host and is checked
+make check HOST=h3-nvidia    # dry-run the whole thing
+make site  HOST=h3-nvidia
+```
+
+`make validate` skips any directory under `hosts/` whose name ends in
+`-template`, so the unfilled skeleton never fails the suite — and the moment you
+rename it, every check applies. `tests/template_test.sh` fills the placeholders
+in a scratch directory on every run, so the template cannot quietly stop working.
 
 ## Adding a machine to an existing role
 
@@ -30,8 +72,10 @@ else. That is a real port, not a copy. What follows is the shape of it.
 
 ### 1. Copy the closest existing host
 
-`h2-amd` is the better starting point for anything that is not CUDA: it already
-deals with device nodes, group IDs, and an engine that is not vLLM.
+Not the template, in this case. `h2-amd` is the better starting point for
+anything that is not CUDA: it already deals with device nodes, group IDs, and an
+engine that is not vLLM. The template gives you a clean skeleton; `h2-amd` gives
+you the awkward parts already solved.
 
 ```bash
 cp -r hosts/h2-amd hosts/h3-intel

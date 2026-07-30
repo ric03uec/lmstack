@@ -62,6 +62,7 @@ change when you move between them — enforced by `tests/parity.yml`.
 
 ```
 hosts/<host>/           self-contained Ansible + engine templates + model YAML
+hosts/h3-template/      skeleton to copy for a third box; filled in by a test
 inventory/              hosts.ini.example -> your gitignored hosts.ini
 skills/lmstack/         the interactive installer skill
 pi-config/              control-host editor configuration
@@ -84,6 +85,9 @@ make test
 It validates every model YAML against the schema, proves the validator rejects
 known-bad configuration, checks alias parity across engines, and feeds real
 secret shapes through the `.stacklog` writer to confirm none survive.
+
+This is what CI runs on every pull request, so a change that breaks it fails
+before review rather than during a bring-up.
 
 ## Documentation
 
@@ -114,7 +118,7 @@ matrix.
 - [x] Phase 3 — the skill
 - [x] Phase 4 — `pi-config` and agent bridges
 - [x] Phase 5 — documentation site
-- [ ] Phase 6 — host template and CI
+- [x] Phase 6 — host template and CI
 
 ## License
 

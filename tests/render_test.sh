@@ -32,9 +32,12 @@ skip()    { printf '  \033[33mSKIP\033[0m %s\n' "$1"; }
 
 # Hosts are renderable only once they have templates; before Phase 1 there are
 # none, and this whole suite is a no-op rather than a failure.
+#
+# `*-template` directories are skeletons to copy, not hosts. Their placeholders
+# cannot render. tests/template_test.sh is what keeps them honest instead.
 mapfile -t hosts < <(
   find hosts -mindepth 3 -name '*.j2' 2>/dev/null \
-    | cut -d/ -f2 | sort -u
+    | cut -d/ -f2 | grep -v -- '-template$' | sort -u
 )
 
 if [[ ${#hosts[@]} -eq 0 ]]; then

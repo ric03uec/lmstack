@@ -1,0 +1,238 @@
+---
+# Renders the stack from hosts/CHANGE_ME_HOST/vllm/, brings it up, and does not
+# return until the gateway and every engine answer.
+#
+#   make up HOST=CHANGE_ME_HOST
+#
+# Runs entirely unprivileged. Persistence comes from docker
+# `restart: unless-stopped` — there is no systemd unit and nothing under /etc.
+#
+# Every check that can fail runs BEFORE the first container is touched. A bad
+# active_models list should cost you two seconds, not a half-finished stack.
+
+- name: Bring up the lmstack inference plane on CHANGE_ME_HOST
+  hosts: CHANGE_ME_HOST
+  become: false
+  gather_facts: true
+
+  vars_files:
+    - vars.yml
+
+  vars:
+    engine_root: "{{ playbook_dir }}/../vllm"
+
+  tasks:
+    # =========================================================================
+    # Load and check — nothing below this line touches the host
+    # =========================================================================
+    # Mirrors tests/render.yml. Kept in sync by the golden files in tests/golden.
+    - name: Load model definitions for the active set
+      ansible.builtin.set_fact:
+        models: >-
+          {{ models | default([])
+             + [lookup('file', engine_root ~ '/models/' ~ item ~ '.yml') | from_yaml] }}
+      loop: "{{ active_models }}"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Verify every active model declares what vLLM needs
+      ansible.builtin.assert:
+        that:
+          - item.engine == 'vllm'
+          - item.hf_model is defined
+          - item.image is defined
+          - item.port is defined
+        fail_msg: >-
+          {{ engine_root }}/models/{{ item.slug }}.yml is not a usable vLLM model
+          definition. Run `make validate` on the control host for the full report.
+      loop: "{{ models }}"
+      loop_control:
+        label: "{{ item.slug }}"
+
+    - name: Verify the active set fits the VRAM budget
+      ansible.builtin.assert:
+        that:
+          - (models | map(attribute='vram_estimate_gib') | sum) <= vram_budget_gib
+        fail_msg: >-
+          Active models need
+          {{ models | map(attribute='vram_estimate_gib') | sum }} GiB but the
+          budget for this host is {{ vram_budget_gib }} GiB. Drop a model from
+          active_models, or raise vram_budget_gib if the card really is larger.
+
+    - name: Verify declared chat template files exist
+      ansible.builtin.stat:
+        path: "{{ engine_root }}/chat-templates/{{ item.chat_template_file }}"
+      register: chat_template_stat
+      when: item.chat_template_file is defined
+      loop: "{{ models }}"
+      loop_control:
+        label: "{{ item.slug }}"
+      failed_when:
+        - item.chat_template_file is defined
+        - not chat_template_stat.stat.exists | default(false)
+
+    # =========================================================================
+    # Layout
+    # =========================================================================
+    - name: Create the install root
+      ansible.builtin.file:
+        path: "{{ install_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Create install subdirectories
+      ansible.builtin.file:
+        path: "{{ install_root }}/{{ item.path }}"
+        state: directory
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: env, mode: "0700"}
+        - {path: hf-cache, mode: "0755"}
+        - {path: litellm, mode: "0755"}
+        - {path: models, mode: "0755"}
+        - {path: chat-templates, mode: "0755"}
+      loop_control:
+        label: "{{ item.path }}"
+
+    # Copied for the record, not for the runtime: the container is driven by the
+    # rendered compose file. Having the source YAML on the host makes it possible
+    # to see what a running stack was built from without the repo.
+    - name: Copy model definitions to the install root
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ install_root }}/models/{{ item | basename }}"
+        mode: "0644"
+      with_fileglob:
+        - "{{ engine_root }}/models/*.yml"
+      loop_control:
+        label: "{{ item | basename }}"
+
+    - name: Copy chat templates to the install root
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ install_root }}/chat-templates/{{ item | basename }}"
+        mode: "0644"
+      with_fileglob:
+        - "{{ engine_root }}/chat-templates/*.jinja"
+      loop_control:
+        label: "{{ item | basename }}"
+
+    # =========================================================================
+    # Secrets — dropped as a template, never overwritten (T5.6)
+    # =========================================================================
+    - name: Drop stack.env from the example when absent
+      ansible.builtin.copy:
+        src: "{{ engine_root }}/env/stack.env.example"
+        dest: "{{ install_root }}/env/stack.env"
+        mode: "0600"
+        force: false
+      register: env_drop
+
+    - name: Explain what to do with a freshly created stack.env
+      ansible.builtin.debug:
+        msg: >-
+          Created {{ install_root }}/env/stack.env from the example. Fill in
+          HF_TOKEN, LITELLM_MASTER_KEY and LITELLM_DB_PASSWORD, then re-run.
+          The file is chmod 600 and is never overwritten by this playbook.
+      when: env_drop.changed  # noqa: no-handler
+
+    - name: Read stack.env for the secret presence check
+      ansible.builtin.slurp:
+        src: "{{ install_root }}/env/stack.env"
+      register: env_slurped
+
+    # Checked by shape, never by value, and never printed. Catches the blank
+    # template before a five-minute image pull discovers it for us (T5.1, T5.2).
+    - name: Verify required secrets have been filled in
+      ansible.builtin.assert:
+        that:
+          - (env_slurped.content | b64decode) is regex('(?m)^' ~ item.key ~ '=\S+')
+        fail_msg: "{{ install_root }}/env/stack.env has a blank {{ item.key }}. {{ item.hint }}"
+      loop:
+        - key: HF_TOKEN
+          hint: >-
+            Create a read token at https://huggingface.co/settings/tokens.
+            Gated repositories will not download without it.
+        - key: LITELLM_MASTER_KEY
+          hint: >-
+            This is the bearer token your clients send. Generate one with:
+            printf 'sk-%s\n' "$(openssl rand -hex 24)"
+        - key: LITELLM_DB_PASSWORD
+          hint: >-
+            Postgres backs the LiteLLM UI and spend logs. Generate one with:
+            openssl rand -hex 24
+      loop_control:
+        label: "{{ item.key }}"
+
+    # =========================================================================
+    # Render
+    # =========================================================================
+    - name: Render docker-compose.yml
+      ansible.builtin.template:
+        src: "{{ engine_root }}/docker-compose.yml.j2"
+        dest: "{{ install_root }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Render the LiteLLM routing table
+      ansible.builtin.template:
+        src: "{{ engine_root }}/litellm/config.yaml.j2"
+        dest: "{{ install_root }}/litellm/config.yaml"
+        mode: "0644"
+      register: litellm_config
+
+    # =========================================================================
+    # Bring up
+    # =========================================================================
+    - name: Start the stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ install_root }}"
+        files:
+          - docker-compose.yml
+        env_files:
+          - "{{ install_root }}/env/stack.env"
+        state: present
+        pull: missing
+        wait: false
+        remove_orphans: true
+
+    # config.yaml is bind-mounted, so LiteLLM reads it once at start. Compose
+    # sees no change to the service definition and will not recycle it for us.
+    - name: Restart LiteLLM when its routing table changed
+      community.docker.docker_container:
+        name: litellm
+        restart: true
+        state: started
+      when: litellm_config.changed  # noqa: no-handler
+
+    # =========================================================================
+    # Health gate — long, because a first run downloads weights
+    # =========================================================================
+    - name: Wait for the LiteLLM gateway
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ litellm_port }}/health/liveliness"
+        status_code: 200
+      register: gateway_health
+      until: gateway_health.status == 200
+      retries: 60
+      delay: 10
+
+    - name: Wait for each engine to finish loading its model
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ item.port }}/v1/models"
+        status_code: 200
+      register: engine_health
+      until: engine_health.status == 200
+      retries: 240
+      delay: 10
+      loop: "{{ models }}"
+      loop_control:
+        label: "{{ item.slug }} (:{{ item.port }})"
+
+    - name: Stack summary
+      ansible.builtin.debug:
+        msg:
+          - "lmstack is up on {{ host_alias }}."
+          - "Endpoint:  http://{{ ansible_default_ipv4.address | default(inventory_hostname) }}:{{ litellm_port }}"
+          - "Aliases:   {{ models | map(attribute='virtual_models') | flatten | map(attribute='name') | join(', ') }}"
+          - "VRAM used: {{ models | map(attribute='vram_estimate_gib') | sum }} of {{ vram_budget_gib }} GiB"
+          - "Verify:    make verify HOST={{ host_alias }}"

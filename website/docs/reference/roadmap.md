@@ -17,7 +17,10 @@ full design and the test matrix the gates refer to.
 | 3 | `skills/lmstack` interactive installer | T6 | done |
 | 4 | `pi-config`, `lmstack-ask`, Claude Code and opencode bridges | T4 | done |
 | 5 | This site, and the Pages workflow that publishes it | site builds, links resolve | done |
-| 6 | `h3-template` and CI running the offline suite on PRs | CI green | next |
+| 6 | `h3-template` and CI running the offline suite on PRs | CI green | done |
+
+All six phases are in. What follows is maintenance and whatever the next piece
+of hardware demands.
 
 Phase 0 built the validator *before* the playbooks, so `h1-nvidia` and
 `h2-amd` were written against an already-enforced schema. That ordering is what
@@ -25,17 +28,20 @@ keeps two intentionally duplicated playbook trees from silently diverging —
 there are no shared Ansible roles here, on purpose, and the validator plus the
 golden render files are what hold the line instead.
 
-## What Phase 6 changes for you
+## The template
 
-Today, [adding a host](../hosts/adding-a-host) means copying `hosts/h2-amd` and
-editing it. That works, and the validator catches most of what you can get
-wrong, but you inherit AMD-specific decisions you then have to notice and
-remove.
+`hosts/h3-template/` is a host that is deliberately incomplete: the directory
+layout, the four playbooks, and the engine templates, with three `CHANGE_ME_`
+placeholders and an empty `active_models`. `make validate` and the render suite
+skip any directory under `hosts/` whose name ends in `-template`, so an unfilled
+skeleton never fails `make test`.
 
-`hosts/h3-template/` will be a host that is deliberately incomplete: the
-directory structure, the three playbooks, and the model schema, with the
-engine-specific parts marked rather than filled in. The validator will skip it
-by name so an unfilled template does not fail `make test`.
+That exemption is also how a template rots, so `tests/template_test.sh` copies
+it into a scratch directory on every run, fills the placeholders, and validates
+the result. It also asserts the template's `.j2` files match `h1-nvidia`'s apart
+from comments — improving the real host's compose template without carrying the
+change across turns the suite red. See
+[adding a host](../hosts/adding-a-host).
 
 ## What is deliberately not planned
 
@@ -71,7 +77,9 @@ The gates above refer to these. Only T0 and T1 run without hardware.
 | T4 | Control host: pi providers, sync, bridges | T4.1 and T4.6 offline; the rest need a running host |
 | T5 | Negative: over-budget, missing secret, unauthenticated request | a host |
 | T6 | Skill: probe classification, install path binding, logging discipline | T6.1–T6.3 offline |
+| T7 | Template: layout parity, no drift from the reference host, instantiation | nothing |
 
-`make test` is T0, T1, T4.1, T4.6, and T6.1–T6.3 — everything that can be proven
-without hardware. The rest are a manual checklist in `PLAN.md`, because a test
-that needs a GPU and forty minutes is not a test anyone runs.
+`make test` is T0, T1, T4.1, T4.6, T6.1–T6.3, and T7 — everything that can be
+proven without hardware, and what CI runs on every pull request. The rest are a
+manual checklist in `PLAN.md`, because a test that needs a GPU and forty minutes
+is not a test anyone runs.
