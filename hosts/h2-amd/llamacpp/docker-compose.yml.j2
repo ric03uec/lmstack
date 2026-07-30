@@ -1,0 +1,113 @@
+---
+# Rendered by hosts/h2-amd/ansible/10-stack.yml. Do not edit the copy that lands
+# in the install root; edit this template and re-run `make up`.
+#
+# Inputs:
+#   models                 list of parsed llamacpp/models/<slug>.yml
+#   install_root           user-space root on the target host
+#   render_node            DRM render node, e.g. /dev/dri/renderD128
+#   llamacpp_render_gid    numeric GID of the host's `render` group
+#   litellm_image          pinned gateway image
+#   litellm_port           externally published gateway port
+#   litellm_bind_address   0.0.0.0, or a Tailscale IP to stay off the LAN
+#
+# GPU access is the DRM render node plus a numeric supplementary group. Numeric
+# because the image's /etc/group has no `render` entry to resolve a name
+# against. No ROCm runtime and no device plugin: the server-vulkan image needs
+# only the host's Vulkan loader and ICD, which bootstrap installs.
+#
+# Exposure invariant: engines publish on 127.0.0.1 only and talk to LiteLLM over
+# the compose network. Postgres publishes nothing. Tests T1.3, T1.4 and T3.8
+# enforce this; it is not a convention.
+services:
+{% for m in models %}
+  llama-{{ m.slug }}:
+    container_name: llama-{{ m.slug }}
+    image: {{ m.image }}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:{{ m.port }}:8080"
+    volumes:
+      - {{ install_root }}/models-gguf:/models:ro
+    devices:
+      - {{ render_node }}:{{ render_node }}
+    group_add:
+      - "{{ llamacpp_render_gid }}"
+    env_file:
+      - {{ install_root }}/env/stack.env
+{% if m.environment is defined and m.environment %}
+    environment:
+{% for k, v in m.environment.items() %}
+      {{ k }}: "{{ v }}"
+{% endfor %}
+{% endif %}
+    # A single llama-server process, no tensor-parallel workers: 2g is headroom,
+    # not a requirement. The 64 MB docker default is still too small for the
+    # Vulkan staging buffers on larger batches.
+    shm_size: "2g"
+    command:
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - -m
+      - /models/{{ m.hf_file }}
+      - -c
+      - "{{ m.context }}"
+      - -ngl
+      - "{{ m.n_gpu_layers }}"
+      - -np
+      - "{{ m.parallel_slots }}"
+{% for arg in m.extra_args | default([]) %}
+      - "{{ arg }}"
+{% endfor %}
+
+{% endfor %}
+  postgres:
+    container_name: litellm-postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # No `ports:` here on purpose. LiteLLM reaches it over the compose network;
+    # nothing outside needs to.
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: "${LITELLM_DB_PASSWORD}"
+      POSTGRES_DB: litellm
+    volumes:
+      - litellm-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  litellm:
+    container_name: litellm
+    image: {{ litellm_image }}
+    restart: unless-stopped
+    ports:
+      - "{{ litellm_bind_address }}:{{ litellm_port }}:4000"
+    # Lets model_list entries reach host-side services (an existing ollama, say)
+    # without hard-coding the bridge IP.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - {{ install_root }}/litellm/config.yaml:/app/config.yaml:ro
+    env_file:
+      - {{ install_root }}/env/stack.env
+    environment:
+      DATABASE_URL: "postgresql://litellm:${LITELLM_DB_PASSWORD}@postgres:5432/litellm"
+      STORE_MODEL_IN_DB: "True"
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+{% for m in models %}
+      llama-{{ m.slug }}:
+        condition: service_started
+{% endfor %}
+
+volumes:
+  litellm-postgres-data:
+    name: litellm-postgres-data

@@ -1,0 +1,270 @@
+---
+# Renders the stack from hosts/h2-amd/llamacpp/, brings it up, and does not
+# return until the gateway and every engine answer.
+#
+#   make up HOST=h2-amd
+#
+# Runs entirely unprivileged. Persistence comes from docker
+# `restart: unless-stopped` — there is no systemd unit and nothing under /etc.
+# It never touches an existing ollama or LM Studio install.
+#
+# Every check that can fail runs BEFORE the first container is touched. A bad
+# active_models list should cost you two seconds, not a half-finished stack.
+
+- name: Bring up the lmstack inference plane on h2-amd
+  hosts: h2-amd
+  become: false
+  gather_facts: true
+
+  vars_files:
+    - vars.yml
+
+  vars:
+    engine_root: "{{ playbook_dir }}/../llamacpp"
+
+  tasks:
+    # =========================================================================
+    # Load and check — nothing below this line touches the host
+    # =========================================================================
+    # Mirrors tests/render.yml. Kept in sync by the golden files in tests/golden.
+    - name: Load model definitions for the active set
+      ansible.builtin.set_fact:
+        models: >-
+          {{ models | default([])
+             + [lookup('file', engine_root ~ '/models/' ~ item ~ '.yml') | from_yaml] }}
+      loop: "{{ active_models }}"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Verify every active model declares what llama.cpp needs
+      ansible.builtin.assert:
+        that:
+          - item.engine == 'llamacpp'
+          - item.hf_repo is defined
+          - item.hf_file is defined
+          - item.image is defined
+          - item.port is defined
+        fail_msg: >-
+          {{ engine_root }}/models/{{ item.slug }}.yml is not a usable llama.cpp
+          model definition. Run `make validate` on the control host for the full
+          report.
+      loop: "{{ models }}"
+      loop_control:
+        label: "{{ item.slug }}"
+
+    - name: Verify the active set fits the VRAM budget
+      ansible.builtin.assert:
+        that:
+          - (models | map(attribute='vram_estimate_gib') | sum) <= vram_budget_gib
+        fail_msg: >-
+          Active models need
+          {{ models | map(attribute='vram_estimate_gib') | sum }} GiB but the
+          budget for this host is {{ vram_budget_gib }} GiB. Drop a model from
+          active_models, or raise vram_budget_gib — on a unified-memory APU the
+          real ceiling is the GTT allocation, not the BIOS "VRAM" figure.
+
+    - name: Verify the render node is present
+      ansible.builtin.stat:
+        path: "{{ render_node }}"
+      register: dri_render
+      failed_when: not dri_render.stat.exists
+
+    # Passed to the containers as a numeric supplementary group. Numeric because
+    # the llama.cpp image's /etc/group has no `render` entry to resolve a name
+    # against; the docker daemon sets the container's groups, so the invoking
+    # user does not need to be in `render` on the host.
+    - name: Detect the host render GID
+      ansible.builtin.getent:
+        database: group
+        key: render
+
+    - name: Bind the render GID for the compose template
+      ansible.builtin.set_fact:
+        llamacpp_render_gid: "{{ ansible_facts.getent_group.render[1] }}"
+
+    # =========================================================================
+    # Layout
+    # =========================================================================
+    - name: Create the install root
+      ansible.builtin.file:
+        path: "{{ install_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Create install subdirectories
+      ansible.builtin.file:
+        path: "{{ install_root }}/{{ item.path }}"
+        state: directory
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: env, mode: "0700"}
+        - {path: models-gguf, mode: "0755"}
+        - {path: litellm, mode: "0755"}
+        - {path: models, mode: "0755"}
+      loop_control:
+        label: "{{ item.path }}"
+
+    # Copied for the record, not for the runtime: the container is driven by the
+    # rendered compose file. Having the source YAML on the host makes it possible
+    # to see what a running stack was built from without the repo.
+    - name: Copy model definitions to the install root
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ install_root }}/models/{{ item | basename }}"
+        mode: "0644"
+      with_fileglob:
+        - "{{ engine_root }}/models/*.yml"
+      loop_control:
+        label: "{{ item | basename }}"
+
+    # =========================================================================
+    # Secrets — dropped as a template, never overwritten (T5.6)
+    # =========================================================================
+    - name: Drop stack.env from the example when absent
+      ansible.builtin.copy:
+        src: "{{ engine_root }}/env/stack.env.example"
+        dest: "{{ install_root }}/env/stack.env"
+        mode: "0600"
+        force: false
+      register: env_drop
+
+    - name: Explain what to do with a freshly created stack.env
+      ansible.builtin.debug:
+        msg: >-
+          Created {{ install_root }}/env/stack.env from the example. Fill in
+          LITELLM_MASTER_KEY and LITELLM_DB_PASSWORD, then re-run. HF_TOKEN is
+          optional here — the default GGUFs are ungated. The file is chmod 600
+          and is never overwritten by this playbook.
+      when: env_drop.changed  # noqa: no-handler
+
+    - name: Read stack.env for the secret presence check
+      ansible.builtin.slurp:
+        src: "{{ install_root }}/env/stack.env"
+      register: env_slurped
+
+    # Checked by shape, never by value, and never printed. Catches the blank
+    # template before a multi-gigabyte GGUF download discovers it for us
+    # (T5.1, T5.2).
+    - name: Verify required secrets have been filled in
+      ansible.builtin.assert:
+        that:
+          - (env_slurped.content | b64decode) is regex('(?m)^' ~ item.key ~ '=\S+')
+        fail_msg: "{{ install_root }}/env/stack.env has a blank {{ item.key }}. {{ item.hint }}"
+      loop:
+        - key: LITELLM_MASTER_KEY
+          hint: >-
+            This is the bearer token your clients send. Generate one with:
+            printf 'sk-%s\n' "$(openssl rand -hex 24)"
+        - key: LITELLM_DB_PASSWORD
+          hint: >-
+            Postgres backs the LiteLLM UI and spend logs. Generate one with:
+            openssl rand -hex 24
+      loop_control:
+        label: "{{ item.key }}"
+
+    # =========================================================================
+    # Weights — pulled to the host, not into a container cache
+    # =========================================================================
+    # Extracted here rather than passed through the environment so it can be
+    # masked. It is only needed if someone points a model file at a gated repo.
+    - name: Extract HF_TOKEN from stack.env, if set
+      ansible.builtin.set_fact:
+        hf_token: >-
+          {{ (env_slurped.content | b64decode)
+             | regex_search('(?m)^HF_TOKEN=(\S+)', '\1')
+             | default([''], true) | first }}
+      no_log: true
+
+    # get_url skips a file already on disk, so a re-run is free. The retries are
+    # for HuggingFace's CDN, which drops long transfers often enough to matter on
+    # a 5 GiB file.
+    - name: Download GGUF weights
+      ansible.builtin.get_url:
+        url: "https://huggingface.co/{{ item.hf_repo }}/resolve/main/{{ item.hf_file }}?download=true"
+        dest: "{{ install_root }}/models-gguf/{{ item.hf_file }}"
+        mode: "0644"
+        headers: "{{ {'Authorization': 'Bearer ' + hf_token} if hf_token else omit }}"
+        timeout: 60
+      register: gguf_download
+      until: gguf_download is succeeded
+      retries: 3
+      delay: 15
+      loop: "{{ models }}"
+      loop_control:
+        label: "{{ item.hf_file }}"
+
+    # =========================================================================
+    # Render
+    # =========================================================================
+    - name: Render docker-compose.yml
+      ansible.builtin.template:
+        src: "{{ engine_root }}/docker-compose.yml.j2"
+        dest: "{{ install_root }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Render the LiteLLM routing table
+      ansible.builtin.template:
+        src: "{{ engine_root }}/litellm/config.yaml.j2"
+        dest: "{{ install_root }}/litellm/config.yaml"
+        mode: "0644"
+      register: litellm_config
+
+    # =========================================================================
+    # Bring up
+    # =========================================================================
+    - name: Start the stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ install_root }}"
+        files:
+          - docker-compose.yml
+        env_files:
+          - "{{ install_root }}/env/stack.env"
+        state: present
+        pull: missing
+        wait: false
+        remove_orphans: true
+
+    # config.yaml is bind-mounted, so LiteLLM reads it once at start. Compose
+    # sees no change to the service definition and will not recycle it for us.
+    - name: Restart LiteLLM when its routing table changed
+      community.docker.docker_container:
+        name: litellm
+        restart: true
+        state: started
+      when: litellm_config.changed  # noqa: no-handler
+
+    # =========================================================================
+    # Health gate
+    # =========================================================================
+    - name: Wait for the LiteLLM gateway
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ litellm_port }}/health/liveliness"
+        status_code: 200
+      register: gateway_health
+      until: gateway_health.status == 200
+      retries: 60
+      delay: 10
+
+    # /health, not /v1/models: llama-server answers /v1/models while the model is
+    # still loading, so gating on it would let the smoke tests race the weights.
+    # Weights are already on disk by now, so this is layer offload only.
+    - name: Wait for each engine to finish loading its model
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ item.port }}/health"
+        status_code: 200
+      register: engine_health
+      until: engine_health.status == 200
+      retries: 120
+      delay: 5
+      loop: "{{ models }}"
+      loop_control:
+        label: "{{ item.slug }} (:{{ item.port }})"
+
+    - name: Stack summary
+      ansible.builtin.debug:
+        msg:
+          - "lmstack is up on {{ host_alias }}."
+          - "Endpoint:  http://{{ ansible_default_ipv4.address | default(inventory_hostname) }}:{{ litellm_port }}"
+          - "Aliases:   {{ models | map(attribute='virtual_models') | flatten | map(attribute='name') | join(', ') }}"
+          - "VRAM used: {{ models | map(attribute='vram_estimate_gib') | sum }} of {{ vram_budget_gib }} GiB"
+          - "Verify:    make verify HOST={{ host_alias }}"

@@ -88,7 +88,7 @@ matrix.
 
 - [x] Phase 0 — model contract, validator, `.stacklog` writer, offline tests
 - [x] Phase 1 — `h1-nvidia` playbooks
-- [ ] Phase 2 — `h2-amd` playbooks
+- [x] Phase 2 — `h2-amd` playbooks
 - [ ] Phase 3 — the skill
 - [ ] Phase 4 — `pi-config` and agent bridges
 - [ ] Phase 5 — documentation site
