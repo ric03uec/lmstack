@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" role="img" aria-label="Cloud-model dev stack: user, Claude Code, Claude Cloud">
+  <defs>
+    <marker id="arrow-cloud" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2d6f88" />
+    </marker>
+    <style>
+      .box  { fill: #ffffff; stroke: #2d6f88; stroke-width: 2; }
+      .box-soft { fill: #e0eef4; stroke: #2d6f88; stroke-width: 2; }
+      .lbl  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 22px; font-weight: 600; fill: #0f172a; text-anchor: middle; dominant-baseline: middle; }
+      .sub  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; fill: #64748b; text-anchor: middle; dominant-baseline: middle; }
+      .side { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; fill: #64748b; }
+      .flow { stroke: #2d6f88; stroke-width: 2; fill: none; }
+    </style>
+  </defs>
+
+  <!-- User -->
+  <rect class="box" x="500" y="60"  width="200" height="70" rx="8" />
+  <text class="lbl" x="600" y="95">User</text>
+
+  <line class="flow" x1="600" y1="130" x2="600" y2="220" marker-end="url(#arrow-cloud)" />
+
+  <!-- Claude Code -->
+  <rect class="box-soft" x="430" y="230" width="340" height="120" rx="8" />
+  <text class="lbl" x="600" y="270">Claude Code</text>
+  <text class="sub" x="600" y="300">plugins · memory · generic prompts</text>
+  <text class="sub" x="600" y="322">+ project context</text>
+
+  <line class="flow" x1="600" y1="350" x2="600" y2="450" marker-end="url(#arrow-cloud)" />
+
+  <!-- Claude Cloud -->
+  <rect class="box" x="480" y="460" width="240" height="90" rx="8" />
+  <text class="lbl" x="600" y="497">Claude Cloud</text>
+  <text class="sub" x="600" y="522">frontier model</text>
+
+  <!-- Callout -->
+  <text class="side" x="60" y="580">3 boxes. It just works.</text>
+</svg>

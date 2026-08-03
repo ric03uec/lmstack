@@ -7,62 +7,64 @@
 <p class="subtitle">Devashish Meena · AI Tinkerers Seattle · Aug 4, 2026</p>
 
 Note:
-5 minutes. Slide 2 is the anchor — spend the most time there. Slide 4 is the demo.
+5 minutes. Slide 2 defines the term. Slide 3 sells it. Slide 5 is the anchor. Slide 7 is the demo.
 
 ---
 
-<!-- .slide: class="stack" -->
+<!-- .slide: class="definition" -->
+
+## software forge
+
+<p class="def">An AI execution environment powered by a <strong>local LLM</strong>, optimized for a <strong>specific task type</strong>.</p>
+
+<div class="traits">
+  <span>runs 100% airgapped</span>
+  <span>does one job well</span>
+  <span>uses local inference</span>
+</div>
+
+<p class="punch">smaller than a factory. <span class="hot">hotter</span>. yours.</p>
+
+Note:
+This is the term I want the room to remember.
+Say it slowly. Pause after the punchline. Then pivot to the contrast on the next slide.
+
+---
+
+<!-- .slide: class="diagram" -->
+
+## Software factory vs. software forge
+
+<img class="stack-svg" src="forge-vs-factory.svg" alt="Contrast: software factory (busy pipeline, many agents, cloud-scale) versus software forge (one task, one execution, one artifact, local tools). Local models aren't scaling factories — they're building forges." />
+
+Note:
+The reframe. Say the tagline out loud, verbatim:
+"Local models aren't scaling factories — they're building forges."
+Then pause. Let it land before moving to the stacks.
+
+---
+
+<!-- .slide: class="diagram" -->
 
 ## Dev stack with cloud models
 
-<pre><code class="language-text">
-User
-  │
-  ▼
-Claude Code  ─── plugins, memory, generic prompts
-  │
-  ├── + project context
-  │
-  ▼
-Claude Cloud
-</code></pre>
-
-Four boxes. It just works. This is what most of us have.
+<img class="stack-svg" src="stack-cloud.svg" alt="Cloud stack: user → Claude Code → Claude Cloud" />
 
 Note:
-Deliberately underwhelming. The point of this slide is the visual contrast with the next one.
+Deliberately underwhelming. Contrast with the next slide.
 
 ---
 
-<!-- .slide: class="stack" -->
+<!-- .slide: class="diagram" -->
 
 ## Dev stack with local models
 
-<pre><code class="language-text">
-User
-  │
-  ├── user context
-  ├── project context
-  ├── harness system prompt
-  │
-  ▼
-LiteLLM              ── model router
-  │
-  ▼
-vLLM · llama.cpp     ── model runtime
-  │
-  ├── model params        context window, temp, top-p
-  ├── runtime config      num_sequences, MTP, KV cache
-  │
-  ▼
-DGX Spark            ── 1 PF FP4 · GB10 unified memory
-                        on-desk · air-gapped · no rate limits
-</code></pre>
+<img class="stack-svg" src="stack-local.svg" alt="Local stack: pi harness with curated context, LiteLLM router, vLLM, switchable hardware, observability" />
 
 Note:
-This slide IS the talk. Don't rush.
-Call out three layers: router, runtime config, hardware.
-Let the density of the slide carry the argument — you don't have to explain every line.
+This slide IS the technical talk. Don't rush.
+Call out: pi's curated context, the LiteLLM router, the two config sidebars, and hardware being switchable.
+Let the density of the diagram carry the argument — you don't need to name every box.
 
 ---
 

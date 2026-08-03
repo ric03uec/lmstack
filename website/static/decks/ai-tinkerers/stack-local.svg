@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 680" role="img" aria-label="Local-model dev stack: pi harness with curated context, LiteLLM router, vLLM, switchable hardware, observability">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8" />
+    </marker>
+    <marker id="arr-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2d6f88" />
+    </marker>
+    <style>
+      .lbl-big  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 18px; font-weight: 600; fill: #0f172a; text-anchor: middle; dominant-baseline: middle; }
+      .lbl      { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 600; fill: #0f172a; text-anchor: middle; dominant-baseline: middle; }
+      .lbl-sm   { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; fill: #0f172a; text-anchor: middle; dominant-baseline: middle; }
+      .cap      { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; fill: #64748b; text-anchor: middle; dominant-baseline: middle; }
+      .cap-l    { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; fill: #64748b; text-anchor: start;  dominant-baseline: middle; }
+      .cap-r    { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; fill: #64748b; text-anchor: end;    dominant-baseline: middle; }
+      .side-t   { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; font-weight: 600; fill: #334155; text-anchor: start;  dominant-baseline: middle; }
+      .side-i   { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; fill: #475569; text-anchor: start;  dominant-baseline: middle; }
+      .or       { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-style: italic; fill: #64748b; text-anchor: middle; dominant-baseline: middle; }
+      .flow     { stroke: #94a3b8; stroke-width: 1.4; fill: none; }
+      .flow-key { stroke: #2d6f88; stroke-width: 2;   fill: none; }
+      .flow-dot { stroke: #94a3b8; stroke-width: 1.2; fill: none; stroke-dasharray: 4 3; }
+    </style>
+  </defs>
+
+  <!-- ─── User ─────────────────────────────────────────────── -->
+  <rect x="650" y="10" width="100" height="38" rx="6" fill="#ffffff" stroke="#334155" stroke-width="1.5" />
+  <text class="lbl" x="700" y="30">User</text>
+
+  <line class="flow" x1="700" y1="48" x2="700" y2="80" marker-end="url(#arr)" />
+
+  <!-- ─── pi harness ──────────────────────────────────────── -->
+  <rect x="590" y="80" width="220" height="60" rx="8" fill="#f3ecfb" stroke="#7c3aed" stroke-width="1.8" />
+  <text class="lbl-big" x="700" y="104">pi</text>
+  <text class="cap" x="700" y="126">harness · curated context injection</text>
+
+  <!-- alternate harness chips beside pi -->
+  <text class="cap-l" x="820" y="98" style="fill:#94a3b8">also:</text>
+  <rect x="820" y="106" width="90" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
+  <text class="cap" x="865" y="117">claude code</text>
+  <rect x="920" y="106" width="80" height="20" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" />
+  <text class="cap" x="960" y="117">opencode</text>
+
+  <!-- ─── Context slice (limited, 3 chips) ────────────────── -->
+  <text class="cap" x="700" y="160" style="fill:#7c3aed;font-weight:600">only what's needed  →  limited context, per request</text>
+
+  <g>
+    <rect x="380" y="175" width="220" height="48" rx="6" fill="#faf6fe" stroke="#7c3aed" stroke-width="1.2" />
+    <text class="lbl-sm" x="490" y="193">task context</text>
+    <text class="cap" x="490" y="210">prompt · turn history</text>
+
+    <rect x="610" y="175" width="220" height="48" rx="6" fill="#faf6fe" stroke="#7c3aed" stroke-width="1.2" />
+    <text class="lbl-sm" x="720" y="193">project state</text>
+    <text class="cap" x="720" y="210">CLAUDE.md · env · git</text>
+
+    <rect x="840" y="175" width="220" height="48" rx="6" fill="#faf6fe" stroke="#7c3aed" stroke-width="1.2" />
+    <text class="lbl-sm" x="950" y="193">relevant files</text>
+    <text class="cap" x="950" y="210">selected · not the tree</text>
+  </g>
+
+  <!-- pi → context (fan out, short) -->
+  <path class="flow" d="M 700 140 C 700 158, 490 168, 490 175" marker-end="url(#arr)" />
+  <path class="flow" d="M 700 140 L 720 175" marker-end="url(#arr)" />
+  <path class="flow" d="M 700 140 C 700 158, 950 168, 950 175" marker-end="url(#arr)" />
+
+  <!-- ─── Router (LiteLLM) ────────────────────────────────── -->
+  <rect x="470" y="270" width="460" height="66" rx="8" fill="#e0eef4" stroke="#2d6f88" stroke-width="2" />
+  <text class="lbl-big" x="700" y="294">LiteLLM</text>
+  <text class="cap" x="700" y="318">model router · unified OpenAI API · retries · fallbacks · budgets</text>
+
+  <!-- Context → Router (fan in, converging cleanly) -->
+  <path class="flow" d="M 490 223 C 490 245, 600 260, 600 270" marker-end="url(#arr)" />
+  <path class="flow" d="M 720 223 L 700 270" marker-end="url(#arr)" />
+  <path class="flow" d="M 950 223 C 950 245, 810 260, 810 270" marker-end="url(#arr)" />
+
+  <!-- ─── Runtime: vLLM (single) ──────────────────────────── -->
+  <rect x="470" y="370" width="460" height="70" rx="8" fill="#fef3c7" stroke="#b45309" stroke-width="2" />
+  <text class="lbl-big" x="700" y="394">vLLM</text>
+  <text class="cap" x="700" y="418">PagedAttention · OpenAI-compatible endpoint · streaming</text>
+
+  <line class="flow-key" x1="700" y1="336" x2="700" y2="370" marker-end="url(#arr-t)" />
+
+  <!-- ─── Left sidebar: Model params ──────────────────────── -->
+  <rect x="20" y="270" width="150" height="200" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2" />
+  <text class="side-t" x="32" y="290">model params</text>
+  <text class="side-i" x="32" y="314">— context window</text>
+  <text class="side-i" x="32" y="332">— temperature</text>
+  <text class="side-i" x="32" y="350">— top-p / top-k</text>
+  <text class="side-i" x="32" y="368">— max_tokens</text>
+  <text class="side-i" x="32" y="386">— stop tokens</text>
+  <text class="side-i" x="32" y="404">— repeat penalty</text>
+  <text class="side-i" x="32" y="422">— seed</text>
+  <text class="side-i" x="32" y="454" style="fill:#94a3b8">every model, every call</text>
+  <path class="flow-dot" d="M 170 400 L 470 405" />
+
+  <!-- ─── Right sidebar: Runtime config ───────────────────── -->
+  <rect x="1230" y="270" width="150" height="200" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2" />
+  <text class="side-t" x="1242" y="290">runtime config</text>
+  <text class="side-i" x="1242" y="314">— num_sequences</text>
+  <text class="side-i" x="1242" y="332">— MTP · spec decode</text>
+  <text class="side-i" x="1242" y="350">— KV cache size</text>
+  <text class="side-i" x="1242" y="368">— batch size</text>
+  <text class="side-i" x="1242" y="386">— quantization</text>
+  <text class="side-i" x="1242" y="404">— tensor parallel</text>
+  <text class="side-i" x="1242" y="422">— GPU mem fraction</text>
+  <text class="side-i" x="1242" y="454" style="fill:#94a3b8">tuned per hardware</text>
+  <path class="flow-dot" d="M 1230 400 L 930 405" />
+
+  <!-- ─── Hardware row (3 switchable options) ─────────────── -->
+  <text class="cap" x="700" y="465" style="fill:#15803d;font-weight:600">hardware — switchable</text>
+
+  <g>
+    <rect x="150" y="480" width="320" height="90" rx="10" fill="#dcfce7" stroke="#15803d" stroke-width="1.8" />
+    <text class="lbl" x="310" y="504">DGX Spark</text>
+    <text class="cap" x="310" y="524">GB10 · 128 GB unified · 1 PF FP4</text>
+    <text class="cap" x="310" y="544">on-desk · silent</text>
+    <text class="cap" x="310" y="562" style="fill:#15803d">the aspirational rig</text>
+  </g>
+
+  <text class="or" x="500" y="525">or</text>
+
+  <g>
+    <rect x="530" y="480" width="320" height="90" rx="10" fill="#dcfce7" stroke="#15803d" stroke-width="1.8" />
+    <text class="lbl" x="690" y="504">AMD desktop / server</text>
+    <text class="cap" x="690" y="524">Instinct · Ryzen AI · Radeon</text>
+    <text class="cap" x="690" y="544">under-desk · racked · homelab</text>
+    <text class="cap" x="690" y="562" style="fill:#15803d">the pragmatic rig</text>
+  </g>
+
+  <text class="or" x="880" y="525">or</text>
+
+  <g>
+    <rect x="910" y="480" width="340" height="90" rx="10" fill="#dcfce7" stroke="#15803d" stroke-width="1.8" />
+    <text class="lbl" x="1080" y="504">your laptop</text>
+    <text class="cap" x="1080" y="524">CUDA GPU · unified-memory Mac</text>
+    <text class="cap" x="1080" y="544">already in your bag</text>
+    <text class="cap" x="1080" y="562" style="fill:#15803d">zero-purchase start</text>
+  </g>
+
+  <!-- vLLM → Hardware (fan out) -->
+  <path class="flow-key" d="M 550 440 C 550 460, 310 470, 310 480" marker-end="url(#arr-t)" />
+  <path class="flow-key" d="M 700 440 L 690 480" marker-end="url(#arr-t)" />
+  <path class="flow-key" d="M 850 440 C 850 460, 1080 470, 1080 480" marker-end="url(#arr-t)" />
+
+  <!-- ─── Observability strip ─────────────────────────────── -->
+  <rect x="20" y="600" width="1360" height="60" rx="8" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.2" />
+  <text class="side-t" x="42" y="620" style="fill:#1d4ed8">observability →</text>
+  <text class="lbl-sm" x="240" y="620">logs</text>
+  <text class="lbl-sm" x="340" y="620">metrics</text>
+  <text class="lbl-sm" x="460" y="620">traces</text>
+  <text class="lbl-sm" x="620" y="620">model registry</text>
+  <text class="lbl-sm" x="810" y="620">prompt versioning</text>
+  <text class="lbl-sm" x="1020" y="620">eval / regression</text>
+  <text class="lbl-sm" x="1240" y="620">token accounting</text>
+  <text class="cap" x="700" y="644">the parts nobody warns you about</text>
+</svg>

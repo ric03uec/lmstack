@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 680" role="img" aria-label="Software factory versus software forge: local models build forges, not factories">
+  <defs>
+    <marker id="fac-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8" />
+    </marker>
+    <marker id="frg-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2d6f88" />
+    </marker>
+    <style>
+      .p-title  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 24px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
+      .p-sub    { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; text-anchor: middle; dominant-baseline: middle; }
+      .stg      { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; fill: #334155; text-anchor: middle; dominant-baseline: middle; }
+      .chip     { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; fill: #64748b; text-anchor: middle; dominant-baseline: middle; }
+      .lbl      { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 600; fill: #0f172a; text-anchor: middle; dominant-baseline: middle; }
+      .lbl-big  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 18px; font-weight: 700; fill: #0f172a; text-anchor: middle; dominant-baseline: middle; }
+      .cap      { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; fill: #64748b; text-anchor: middle; dominant-baseline: middle; }
+      .cap-l    { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; fill: #64748b; text-anchor: start;  dominant-baseline: middle; }
+      .foot     { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 600; fill: #ffffff; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+  </defs>
+
+  <!-- ─── Left panel: software factory (busy, muted) ─────── -->
+  <rect x="20" y="30" width="640" height="560" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" />
+  <text class="p-title" x="340" y="62" fill="#64748b">software factory</text>
+  <text class="p-sub"   x="340" y="86" fill="#94a3b8">what the industry keeps pitching</text>
+
+  <!-- Frontier model cloud (background hint) -->
+  <ellipse cx="540" cy="128" rx="80" ry="26" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1" />
+  <text class="chip" x="540" y="128" style="font-size:11px">frontier model</text>
+
+  <!-- Pipeline: 5 stages -->
+  <g>
+    <rect x="50"  y="180" width="105" height="46" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4" />
+    <text class="stg" x="102" y="196">plan</text>
+    <text class="chip" x="102" y="212">specs · tickets</text>
+
+    <rect x="175" y="180" width="105" height="46" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4" />
+    <text class="stg" x="227" y="196">orchestrate</text>
+    <text class="chip" x="227" y="212">route · assign</text>
+
+    <rect x="300" y="180" width="105" height="46" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4" />
+    <text class="stg" x="352" y="196">generate</text>
+    <text class="chip" x="352" y="212">code · docs</text>
+
+    <rect x="425" y="180" width="105" height="46" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4" />
+    <text class="stg" x="477" y="196">validate</text>
+    <text class="chip" x="477" y="212">test · review</text>
+
+    <rect x="550" y="180" width="90" height="46" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4" />
+    <text class="stg" x="595" y="196">ship</text>
+    <text class="chip" x="595" y="212">deploy · page</text>
+  </g>
+  <path d="M 155 203 L 175 203" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#fac-arr)" fill="none" />
+  <path d="M 280 203 L 300 203" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#fac-arr)" fill="none" />
+  <path d="M 405 203 L 425 203" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#fac-arr)" fill="none" />
+  <path d="M 530 203 L 550 203" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#fac-arr)" fill="none" />
+
+  <!-- Agent chips (many parallel roles) -->
+  <text class="cap-l" x="50" y="255" style="fill:#334155;font-weight:600">many agents, in parallel:</text>
+  <g>
+    <rect x="50"  y="270" width="88" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="94" y="281">planner</text>
+    <rect x="145" y="270" width="80" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="185" y="281">coder</text>
+    <rect x="232" y="270" width="90" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="277" y="281">reviewer</text>
+    <rect x="329" y="270" width="80" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="369" y="281">tester</text>
+    <rect x="416" y="270" width="100" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="466" y="281">doc-writer</text>
+    <rect x="523" y="270" width="110" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="578" y="281">deployer</text>
+
+    <rect x="50"  y="298" width="100" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="100" y="309">researcher</text>
+    <rect x="157" y="298" width="88" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="201" y="309">triager</text>
+    <rect x="252" y="298" width="100" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="302" y="309">refactorer</text>
+    <rect x="359" y="298" width="98" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="408" y="309">integrator</text>
+    <rect x="464" y="298" width="98" height="22" rx="4" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text class="chip" x="513" y="309">on-call</text>
+  </g>
+
+  <!-- Output artifacts (many, scattered) -->
+  <text class="cap-l" x="50" y="360" style="fill:#334155;font-weight:600">many outputs, per hour:</text>
+  <g>
+    <rect x="50"  y="378" width="70" height="30" rx="3" fill="#ffffff" stroke="#cbd5e1" />
+    <text class="chip" x="85" y="393">PRs</text>
+    <rect x="128" y="378" width="70" height="30" rx="3" fill="#ffffff" stroke="#cbd5e1" />
+    <text class="chip" x="163" y="393">tests</text>
+    <rect x="206" y="378" width="70" height="30" rx="3" fill="#ffffff" stroke="#cbd5e1" />
+    <text class="chip" x="241" y="393">docs</text>
+    <rect x="284" y="378" width="90" height="30" rx="3" fill="#ffffff" stroke="#cbd5e1" />
+    <text class="chip" x="329" y="393">releases</text>
+    <rect x="382" y="378" width="110" height="30" rx="3" fill="#ffffff" stroke="#cbd5e1" />
+    <text class="chip" x="437" y="393">dashboards</text>
+    <rect x="500" y="378" width="130" height="30" rx="3" fill="#ffffff" stroke="#cbd5e1" />
+    <text class="chip" x="565" y="393">on-call actions</text>
+  </g>
+
+  <!-- Costs -->
+  <line x1="50" y1="440" x2="630" y2="440" stroke="#e2e8f0" stroke-width="1" />
+  <text class="cap-l" x="50" y="465" style="fill:#334155;font-weight:600">wants</text>
+  <text class="cap-l" x="120" y="465">— frontier models · maximal context · always-on</text>
+  <text class="cap-l" x="50" y="486" style="fill:#334155;font-weight:600">costs</text>
+  <text class="cap-l" x="120" y="486">— cloud spend scales with agent hunger</text>
+  <text class="cap-l" x="50" y="507" style="fill:#334155;font-weight:600">owns</text>
+  <text class="cap-l" x="120" y="507">— nobody. the vendor owns the moat.</text>
+  <text class="cap-l" x="50" y="540" style="fill:#94a3b8;font-style:italic">most orgs are one budget review from cancelling this.</text>
+
+  <!-- ─── Middle divider ──────────────────────────────────── -->
+  <line x1="680" y1="60" x2="680" y2="570" stroke="#2d6f88" stroke-width="1.2" stroke-dasharray="4 4" />
+  <circle cx="680" cy="310" r="26" fill="#ffffff" stroke="#2d6f88" stroke-width="1.5" />
+  <text class="lbl" x="680" y="311" style="fill:#2d6f88">vs</text>
+
+  <!-- ─── Right panel: software forge (spare, accent) ─────── -->
+  <rect x="700" y="30" width="680" height="560" rx="12" fill="#f5fbfd" stroke="#2d6f88" stroke-width="2" />
+  <text class="p-title" x="1040" y="62" fill="#1f4d5e">software forge</text>
+  <text class="p-sub"   x="1040" y="86" fill="#2d6f88">what local models actually enable</text>
+
+  <!-- One task in -->
+  <rect x="960" y="140" width="160" height="42" rx="6" fill="#ffffff" stroke="#2d6f88" stroke-width="1.5" />
+  <text class="lbl" x="1040" y="161">one task</text>
+  <text class="chip" x="1040" y="176">from you, right now</text>
+
+  <line x1="1040" y1="182" x2="1040" y2="230" stroke="#2d6f88" stroke-width="2" fill="none" marker-end="url(#frg-arr)" />
+
+  <!-- The anvil (single execution unit) -->
+  <rect x="880" y="235" width="320" height="130" rx="10" fill="#e0eef4" stroke="#2d6f88" stroke-width="2.5" />
+  <text class="lbl-big" x="1040" y="270" fill="#1f4d5e">execute</text>
+  <text class="cap"     x="1040" y="294" style="fill:#334155">focused context → local model → result</text>
+  <text class="cap"     x="1040" y="322" style="fill:#64748b">hot, deliberate, one piece at a time</text>
+  <text class="cap"     x="1040" y="346" style="fill:#94a3b8;font-style:italic">the forge, the anvil, the hammer</text>
+
+  <line x1="1040" y1="365" x2="1040" y2="410" stroke="#2d6f88" stroke-width="2" fill="none" marker-end="url(#frg-arr)" />
+
+  <!-- One artifact out -->
+  <rect x="960" y="415" width="160" height="42" rx="6" fill="#ffffff" stroke="#2d6f88" stroke-width="1.5" />
+  <text class="lbl" x="1040" y="436">one artifact</text>
+  <text class="chip" x="1040" y="451">made right</text>
+
+  <!-- Tools cluster (left of anvil) -->
+  <text class="cap-l" x="720" y="220" style="fill:#334155;font-weight:600">tools on the bench</text>
+  <rect x="720" y="235" width="130" height="26" rx="4" fill="#ffffff" stroke="#7c3aed" stroke-width="1.2" />
+  <text class="chip" x="785" y="248">pi · harness</text>
+  <rect x="720" y="268" width="130" height="26" rx="4" fill="#ffffff" stroke="#b45309" stroke-width="1.2" />
+  <text class="chip" x="785" y="281">vLLM · runtime</text>
+  <rect x="720" y="301" width="130" height="26" rx="4" fill="#ffffff" stroke="#15803d" stroke-width="1.2" />
+  <text class="chip" x="785" y="314">your box · hardware</text>
+  <rect x="720" y="334" width="130" height="26" rx="4" fill="#ffffff" stroke="#2d6f88" stroke-width="1.2" />
+  <text class="chip" x="785" y="347">LiteLLM · router</text>
+
+  <!-- Attributes (right of anvil) -->
+  <text class="cap-l" x="1240" y="220" style="fill:#334155;font-weight:600">properties</text>
+  <text class="cap-l" x="1240" y="242">— small</text>
+  <text class="cap-l" x="1240" y="262">— focused</text>
+  <text class="cap-l" x="1240" y="282">— private</text>
+  <text class="cap-l" x="1240" y="302">— owned</text>
+  <text class="cap-l" x="1240" y="322">— cheap to keep hot</text>
+  <text class="cap-l" x="1240" y="342">— yours to tune</text>
+
+  <!-- Costs (mirrors factory box) -->
+  <line x1="720" y1="480" x2="1360" y2="480" stroke="#cfe4ec" stroke-width="1" />
+  <text class="cap-l" x="720" y="505" style="fill:#1f4d5e;font-weight:600">wants</text>
+  <text class="cap-l" x="790" y="505" style="fill:#0f172a">— one good local model · curated context</text>
+  <text class="cap-l" x="720" y="526" style="fill:#1f4d5e;font-weight:600">costs</text>
+  <text class="cap-l" x="790" y="526" style="fill:#0f172a">— one box · one electric bill</text>
+  <text class="cap-l" x="720" y="547" style="fill:#1f4d5e;font-weight:600">owns</text>
+  <text class="cap-l" x="790" y="547" style="fill:#0f172a">— you do. all of it.</text>
+
+  <!-- ─── Footer banner ───────────────────────────────────── -->
+  <rect x="20" y="610" width="1360" height="50" rx="8" fill="#2d6f88" />
+  <text class="foot" x="700" y="636">local models aren't scaling factories — they're building forges</text>
+</svg>

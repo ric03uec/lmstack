@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice" role="presentation">
+  <!-- Anvil silhouette. Dark charcoal at very low opacity so text stays readable. -->
+  <g fill="#0f172a" opacity="0.065">
+    <!-- Top face + horn (horn points left with a smooth curve) -->
+    <path d="M 780 528
+             L 1210 528
+             L 1210 578
+             L 780 578
+             L 740 570
+             Q 710 565 705 555
+             Q 710 545 740 540
+             Z" />
+    <!-- Column / waist -->
+    <path d="M 850 578
+             L 1140 578
+             L 1120 622
+             L 870 622
+             Z" />
+    <!-- Base -->
+    <rect x="770" y="622" width="440" height="42" rx="6" />
+    <!-- Ground shadow -->
+    <ellipse cx="990" cy="678" rx="260" ry="10" opacity="0.55" />
+  </g>
+
+  <!-- Hardy hole hint on top face (subtle dark square) -->
+  <rect x="1130" y="535" width="20" height="20" fill="#0f172a" opacity="0.09" />
+
+  <!-- Hammer resting on the anvil (very subtle) -->
+  <g fill="#0f172a" opacity="0.055">
+    <rect x="880" y="500" width="130" height="18" rx="3" transform="rotate(-14 945 509)" />
+    <rect x="850" y="513" width="10" height="70" transform="rotate(-14 855 548)" />
+  </g>
+
+  <!-- Embers / sparks rising from the anvil face. Warm orange, layered opacity. -->
+  <g fill="#ea580c">
+    <circle cx="960" cy="500" r="4.5" opacity="0.42" />
+    <circle cx="890" cy="470" r="3.5" opacity="0.36" />
+    <circle cx="1010" cy="450" r="3.2" opacity="0.34" />
+    <circle cx="930" cy="420" r="2.8" opacity="0.30" />
+    <circle cx="860" cy="400" r="2.4" opacity="0.28" />
+    <circle cx="1040" cy="390" r="2.6" opacity="0.26" />
+    <circle cx="900" cy="360" r="2.2" opacity="0.24" />
+    <circle cx="980" cy="340" r="2.0" opacity="0.22" />
+    <circle cx="820" cy="330" r="1.8" opacity="0.20" />
+    <circle cx="1070" cy="320" r="2.0" opacity="0.18" />
+    <circle cx="920" cy="290" r="1.8" opacity="0.17" />
+    <circle cx="1010" cy="260" r="1.6" opacity="0.15" />
+    <circle cx="870" cy="240" r="1.4" opacity="0.14" />
+    <circle cx="950" cy="210" r="1.4" opacity="0.12" />
+    <circle cx="1050" cy="190" r="1.2" opacity="0.10" />
+    <circle cx="900" cy="170" r="1.1" opacity="0.09" />
+    <circle cx="980" cy="140" r="1.0" opacity="0.08" />
+    <circle cx="1030" cy="110" r="0.9" opacity="0.07" />
+  </g>
+
+  <!-- Heat shimmer lines (very faint vertical strokes rising from the face) -->
+  <g stroke="#ea580c" stroke-width="1" fill="none" stroke-linecap="round">
+    <path d="M 880 490 Q 878 465 884 445 Q 890 425 886 405" opacity="0.10" />
+    <path d="M 970 495 Q 972 470 966 450 Q 960 430 964 410" opacity="0.10" />
+    <path d="M 1030 490 Q 1032 465 1026 445 Q 1020 425 1024 405" opacity="0.09" />
+  </g>
+
+  <!-- A single warm "workpiece" glow on the anvil face -->
+  <ellipse cx="960" cy="530" rx="60" ry="8" fill="#ea580c" opacity="0.16" />
+  <ellipse cx="960" cy="530" rx="30" ry="4" fill="#fbbf24" opacity="0.28" />
+</svg>
