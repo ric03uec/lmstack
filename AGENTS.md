@@ -25,8 +25,9 @@ because it was learned the hard way there — check the `notes:` block.
    extend the writer.
 3. **Alias parity (goal).** `tests/parity.yml` commits each listed host to
    serving a common set of aliases, so control-host configuration is
-   engine-agnostic. The list is empty right now, on purpose — see the
-   header comment for why.
+   engine-agnostic. The list is empty right now, on purpose: h2-amd serves
+   a different model because llama.cpp cannot extract tool calls from
+   Qwen's markdown-fenced output (see docs/tool-calling-on-h2-amd.md).
 4. **8 GB VRAM floor.** The default active set on every host must fit in 8 GiB.
    Larger configurations ship as non-default catalog entries.
 5. **The skill never runs git.** It shows a diff, writes on confirmation, and
