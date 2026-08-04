@@ -1,0 +1,771 @@
+#!/usr/bin/env node
+// lmstack-ui — read-only local web UI over ~/.lmstack/
+//
+// Subcommands: start | stop | status | restart | open | foreground
+// Serves ui/dist/ statically and a small JSON API at /api/* on 127.0.0.1.
+// Node 20+; no npm deps at runtime.
+
+import http from 'node:http';
+import { existsSync, readFileSync, statSync, openSync, readSync, closeSync, unlinkSync, mkdirSync } from 'node:fs';
+import { readdir, readFile, stat as statAsync } from 'node:fs/promises';
+import { execFile, spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, resolve, extname } from 'node:path';
+import { homedir } from 'node:os';
+import { promisify } from 'node:util';
+
+const execFileP = promisify(execFile);
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(HERE, '..');
+const UI_DIST = join(REPO_ROOT, 'ui', 'dist');
+
+const LMSTACK_HOME = process.env.LMSTACK_HOME || join(homedir(), '.lmstack');
+const PID_FILE = join(LMSTACK_HOME, 'ui.pid');
+const PORT_FILE = join(LMSTACK_HOME, 'ui.port');
+const LOG_FILE = join(LMSTACK_HOME, 'ui.log');
+
+const DEFAULT_PORT = 7878;
+const HOST = '127.0.0.1';
+
+// ─── subcommand dispatch ────────────────────────────────────────────────────
+
+const argv = process.argv.slice(2);
+const cmd = argv[0] || 'status';
+const flags = parseFlags(argv.slice(1));
+
+function parseFlags(args) {
+  const out = {};
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--port') out.port = parseInt(args[++i], 10);
+    else if (a === '--help' || a === '-h') out.help = true;
+  }
+  return out;
+}
+
+function usage() {
+  process.stdout.write([
+    'lmstack-ui — local read-only web UI over ~/.lmstack/',
+    '',
+    'usage: lmstack-ui <command> [--port N]',
+    '',
+    'commands:',
+    '  start        run the server in the background (idempotent)',
+    '  stop         stop the background server',
+    '  restart      stop then start',
+    '  status       print running/stopped and URL',
+    '  open         status + open the URL in a browser',
+    '  foreground   run in the foreground (Ctrl-C to stop)',
+    '',
+  ].join('\n'));
+}
+
+switch (cmd) {
+  case 'help':
+  case '--help':
+  case '-h':        usage(); process.exit(0); break;
+  case 'start':     await cmdStart(); break;
+  case 'stop':      await cmdStop(); break;
+  case 'restart':   await cmdStop(); await cmdStart(); break;
+  case 'status':    process.exit(await cmdStatus()); break;
+  case 'open':      await cmdOpen(); break;
+  case 'foreground': await cmdForeground(); break;
+  case '__daemon':  await cmdForeground(); break;   // internal
+  default:          usage(); process.exit(2);
+}
+
+// ─── lifecycle ──────────────────────────────────────────────────────────────
+
+function readPid() {
+  try {
+    const pid = parseInt(readFileSync(PID_FILE, 'utf8').trim(), 10);
+    return Number.isFinite(pid) ? pid : null;
+  } catch { return null; }
+}
+
+function readPort() {
+  try {
+    const p = parseInt(readFileSync(PORT_FILE, 'utf8').trim(), 10);
+    return Number.isFinite(p) ? p : null;
+  } catch { return null; }
+}
+
+function isAlive(pid) {
+  if (!pid) return false;
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+async function cmdStart() {
+  const running = readPid();
+  if (isAlive(running)) {
+    const port = readPort() || DEFAULT_PORT;
+    process.stdout.write(`lmstack-ui already running (pid ${running}) at http://${HOST}:${port}/\n`);
+    return;
+  }
+  if (!existsSync(join(UI_DIST, 'index.html'))) {
+    process.stderr.write(
+      `lmstack-ui: SPA build missing at ${UI_DIST}/index.html\n` +
+      `run: cd ${join(REPO_ROOT, 'ui')} && npm install && npm run build\n`
+    );
+    process.exit(1);
+  }
+  await ensureDir(LMSTACK_HOME);
+
+  const port = flags.port || DEFAULT_PORT;
+  const out = openSync(LOG_FILE, 'a');
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), '__daemon', '--port', String(port)], {
+    detached: true,
+    stdio: ['ignore', out, out],
+    env: { ...process.env, LMSTACK_UI_DAEMON: '1' },
+  });
+  child.unref();
+
+  // Wait briefly for the child to write PORT_FILE, then report.
+  const started = await waitFor(() => isAlive(child.pid) && readPort() != null, 3000);
+  if (!started) {
+    process.stderr.write(`lmstack-ui: server failed to start; see ${LOG_FILE}\n`);
+    process.exit(1);
+  }
+  const actualPort = readPort() || port;
+  process.stdout.write(`lmstack-ui started (pid ${child.pid}) at http://${HOST}:${actualPort}/\n`);
+}
+
+async function cmdStop() {
+  const pid = readPid();
+  if (!isAlive(pid)) {
+    process.stdout.write('lmstack-ui: not running\n');
+    try { await rm(PID_FILE); await rm(PORT_FILE); } catch {}
+    return;
+  }
+  try { process.kill(pid, 'SIGTERM'); } catch {}
+  const gone = await waitFor(() => !isAlive(pid), 3000);
+  if (!gone) {
+    try { process.kill(pid, 'SIGKILL'); } catch {}
+  }
+  try { await rm(PID_FILE); await rm(PORT_FILE); } catch {}
+  process.stdout.write(`lmstack-ui stopped (pid ${pid})\n`);
+}
+
+async function cmdStatus() {
+  const pid = readPid();
+  if (isAlive(pid)) {
+    const port = readPort() || DEFAULT_PORT;
+    process.stdout.write(`running http://${HOST}:${port}/ (pid ${pid})\n`);
+    return 0;
+  }
+  process.stdout.write('stopped\n');
+  return 1;
+}
+
+async function cmdOpen() {
+  const rc = await cmdStatus();
+  if (rc !== 0) {
+    process.stderr.write('lmstack-ui: not running; run `lmstack-ui start` first\n');
+    process.exit(1);
+  }
+  const port = readPort() || DEFAULT_PORT;
+  const url = `http://${HOST}:${port}/`;
+  const opener = process.platform === 'darwin' ? 'open' : (process.platform === 'win32' ? 'start' : 'xdg-open');
+  spawn(opener, [url], { detached: true, stdio: 'ignore' }).unref();
+}
+
+async function cmdForeground() {
+  await ensureDir(LMSTACK_HOME);
+  const startPort = flags.port || DEFAULT_PORT;
+  const server = http.createServer(onRequest);
+
+  const port = await listenOnFreePort(server, startPort, 10);
+  // eslint-disable-next-line no-console
+  console.log(`[${new Date().toISOString()}] listening http://${HOST}:${port}/`);
+
+  await writeFile(PID_FILE, String(process.pid));
+  await writeFile(PORT_FILE, String(port));
+
+  const cleanup = () => {
+    try { server.close(); } catch {}
+    try { unlinkSyncSafe(PID_FILE); } catch {}
+    try { unlinkSyncSafe(PORT_FILE); } catch {}
+    process.exit(0);
+  };
+  process.on('SIGTERM', cleanup);
+  process.on('SIGINT', cleanup);
+}
+
+function listenOnFreePort(server, start, tries) {
+  return new Promise((resolvePromise, reject) => {
+    let port = start;
+    let left = tries;
+    const tryOnce = () => {
+      const onError = (err) => {
+        if (err.code === 'EADDRINUSE' && left-- > 0) { port++; server.listen(port, HOST, onListen); }
+        else reject(err);
+      };
+      const onListen = () => { server.off('error', onError); resolvePromise(port); };
+      server.once('error', onError);
+      server.listen(port, HOST, onListen);
+    };
+    tryOnce();
+  });
+}
+
+// ─── HTTP request handler ───────────────────────────────────────────────────
+
+async function onRequest(req, res) {
+  const started = Date.now();
+  try {
+    const url = new URL(req.url || '/', `http://${HOST}`);
+    const p = url.pathname;
+    if (p.startsWith('/api/')) {
+      await routeApi(req, res, url);
+    } else {
+      await serveStatic(req, res, p);
+    }
+  } catch (err) {
+    replyError(res, 500, err instanceof Error ? err.message : String(err));
+  } finally {
+    // eslint-disable-next-line no-console
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} ${res.statusCode} ${Date.now() - started}ms`);
+  }
+}
+
+async function routeApi(req, res, url) {
+  const p = url.pathname;
+  if (p === '/api/instances') return replyJson(res, await getInstances());
+  const instMatch = p.match(/^\/api\/instances\/([^/]+)$/);
+  if (instMatch) return replyJson(res, await getInstance(decodeURIComponent(instMatch[1])));
+  if (p === '/api/forges') {
+    return replyJson(res, await getForges({
+      role: url.searchParams.get('role') || undefined,
+      status: url.searchParams.get('status') || undefined,
+    }));
+  }
+  const logMatch = p.match(/^\/api\/forges\/(.+)\/log\/(exec|judge)$/);
+  if (logMatch) {
+    const key = decodeURIComponent(logMatch[1]);
+    const which = logMatch[2];
+    const tail = parseInt(url.searchParams.get('tail') || '200', 10);
+    return replyJson(res, await getLog(key, which, tail));
+  }
+  const forgeMatch = p.match(/^\/api\/forges\/(.+)$/);
+  if (forgeMatch) return replyJson(res, await getForge(decodeURIComponent(forgeMatch[1])));
+  if (p === '/api/ledger') {
+    return replyJson(res, await getLedger({
+      limit: parseInt(url.searchParams.get('limit') || '500', 10),
+      shape: url.searchParams.get('shape') || undefined,
+      outcome: url.searchParams.get('outcome') || undefined,
+      role: url.searchParams.get('role') || undefined,
+    }));
+  }
+  replyError(res, 404, 'not found');
+}
+
+// ─── static ─────────────────────────────────────────────────────────────────
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js':   'application/javascript; charset=utf-8',
+  '.mjs':  'application/javascript; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg':  'image/svg+xml',
+  '.png':  'image/png',
+  '.ico':  'image/x-icon',
+  '.map':  'application/json; charset=utf-8',
+  '.woff': 'font/woff',
+  '.woff2':'font/woff2',
+};
+
+async function serveStatic(req, res, urlPath) {
+  let rel = urlPath === '/' ? '/index.html' : urlPath;
+  const target = resolve(UI_DIST, '.' + rel);
+  if (!target.startsWith(UI_DIST)) return replyError(res, 403, 'forbidden');
+  try {
+    const s = await statAsync(target);
+    if (s.isDirectory()) return serveStatic(req, res, join(rel, 'index.html'));
+    const buf = await readFile(target);
+    const mime = MIME[extname(target)] || 'application/octet-stream';
+    res.writeHead(200, { 'content-type': mime, 'cache-control': 'no-cache' });
+    res.end(buf);
+  } catch {
+    // SPA fallback: unknown routes serve index.html so hash routing works.
+    if (urlPath !== '/index.html' && !urlPath.startsWith('/assets/')) {
+      return serveStatic(req, res, '/index.html');
+    }
+    replyError(res, 404, 'not found');
+  }
+}
+
+// ─── data layer ─────────────────────────────────────────────────────────────
+
+function keyToSlug(key) {
+  return key.replace(/#/g, '-').replace(/\./g, '-');
+}
+
+function shortRepo(key) {
+  const m = /^(.+?)__(.+?)#(\d+)$/.exec(key);
+  return m ? { owner: m[1], repo: m[2], number: m[3] } : null;
+}
+
+async function ensureDir(p) {
+  try { mkdirSync(p, { recursive: true }); } catch {}
+}
+
+// Best-effort vendor from the role name — matches lmstack's `h1-nvidia`,
+// `h2-amd` convention. Only used when probe.json is missing so the UI can
+// still render a vendor badge. Overridden by probe.gpu.vendor once present.
+function inferVendorFromRole(role) {
+  if (!role) return null;
+  if (/nvidia/i.test(role)) return 'nvidia';
+  if (/amd/i.test(role) || /rocm/i.test(role) || /radeon/i.test(role)) return 'amd';
+  return null;
+}
+
+// Reserved top-level names inside ~/.lmstack/ that are never role directories.
+const RESERVED = new Set([
+  'runs', 'worktrees', 'env', 'templates', 'models', 'models-gguf', 'litellm',
+]);
+
+async function listRoles() {
+  try {
+    const entries = await readdir(LMSTACK_HOME, { withFileTypes: true });
+    const roles = [];
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (RESERVED.has(e.name)) continue;
+      const hasHost = existsSync(join(LMSTACK_HOME, e.name, 'host.yml'));
+      const hasTasks = existsSync(join(LMSTACK_HOME, e.name, 'tasks'));
+      if (hasHost || hasTasks) roles.push(e.name);
+    }
+    return roles.sort();
+  } catch {
+    return [];
+  }
+}
+
+// Minimal YAML reader for host.yml — flat key: value plus inline arrays.
+// Anything unrecognized falls through as a raw string. host.yml is written by
+// our own install skill, so we control the shape.
+function parseHostYaml(text) {
+  const out = {};
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*$/, '').trim();
+    if (!line) continue;
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$/.exec(line);
+    if (!m) continue;
+    const key = m[1];
+    let val = m[2].trim();
+    if (val === '') { out[key] = ''; continue; }
+    // inline array [a, b, c]
+    const arr = /^\[(.*)\]$/.exec(val);
+    if (arr) {
+      out[key] = arr[1]
+        .split(',')
+        .map((s) => s.trim().replace(/^["']|["']$/g, ''))
+        .filter(Boolean);
+      continue;
+    }
+    val = val.replace(/^["']|["']$/g, '');
+    out[key] = val;
+  }
+  return out;
+}
+
+async function readHostYaml(role) {
+  try {
+    const text = await readFile(join(LMSTACK_HOME, role, 'host.yml'), 'utf8');
+    return parseHostYaml(text);
+  } catch { return {}; }
+}
+
+async function readProbeJson(role) {
+  try {
+    const text = await readFile(join(LMSTACK_HOME, role, 'probe.json'), 'utf8');
+    return JSON.parse(text);
+  } catch { return null; }
+}
+
+async function readClassifyJson(role) {
+  try {
+    const text = await readFile(join(LMSTACK_HOME, role, 'classify.json'), 'utf8');
+    return JSON.parse(text);
+  } catch { return null; }
+}
+
+async function readTasksForRole(role) {
+  const root = join(LMSTACK_HOME, role, 'tasks');
+  const records = [];
+  if (!existsSync(root)) return records;
+  const repos = await readdir(root, { withFileTypes: true });
+  for (const r of repos) {
+    if (!r.isDirectory()) continue;
+    const files = await readdir(join(root, r.name), { withFileTypes: true });
+    for (const f of files) {
+      if (!f.isFile() || !f.name.endsWith('.json')) continue;
+      try {
+        const raw = await readFile(join(root, r.name, f.name), 'utf8');
+        records.push(JSON.parse(raw));
+      } catch { /* skip unreadable */ }
+    }
+  }
+  return records;
+}
+
+async function liveTmuxSessions() {
+  try {
+    const { stdout } = await execFileP('tmux', ['list-sessions', '-F', '#{session_name}']);
+    const alive = new Set();
+    for (const line of stdout.split(/\r?\n/)) {
+      const s = line.trim();
+      if (s.startsWith('lmstack-')) alive.add(s.slice('lmstack-'.length));
+    }
+    return alive;
+  } catch {
+    return new Set();
+  }
+}
+
+async function readLedger() {
+  const path = join(LMSTACK_HOME, 'ledger.jsonl');
+  const records = [];
+  if (!existsSync(path)) return records;
+  try {
+    const text = await readFile(path, 'utf8');
+    for (const line of text.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t) continue;
+      try { records.push(JSON.parse(t)); } catch { /* skip */ }
+    }
+  } catch { /* empty */ }
+  return records;
+}
+
+function deriveStatus(task, aliveSlugs) {
+  const slug = keyToSlug(task.key);
+  const declared = task.status || 'queued';
+  if (declared === 'running' && !aliveSlugs.has(slug)) return 'stale';
+  return declared;
+}
+
+async function collectForges() {
+  const roles = await listRoles();
+  const aliveSlugs = await liveTmuxSessions();
+  const all = [];
+  for (const role of roles) {
+    const tasks = await readTasksForRole(role);
+    for (const t of tasks) {
+      if (!t || !t.key) continue;
+      const slug = keyToSlug(t.key);
+      const runInfo = await runMeta(slug);
+      const status = deriveStatus(t, aliveSlugs);
+      all.push({
+        key: t.key,
+        role,
+        status,
+        tier: t.tier || null,
+        shape: t.shape || null,
+        pr: t.pr || null,
+        title: t.title || null,
+        url: t.url || null,
+        judgeRounds: runInfo.judgeCount,
+        startedAt: runInfo.startedAt,
+        wallMin: runInfo.wallMin,
+      });
+    }
+  }
+  return all;
+}
+
+async function runMeta(slug) {
+  const runDir = join(LMSTACK_HOME, 'runs', slug);
+  let startedAt = null;
+  let endedAt = null;
+  let judgeCount = 0;
+  let brief = null;
+
+  if (existsSync(runDir)) {
+    try {
+      startedAt = (await readFile(join(runDir, 'started'), 'utf8')).trim() || null;
+    } catch { /* missing is fine */ }
+    try {
+      endedAt = (await readFile(join(runDir, 'ended'), 'utf8')).trim() || null;
+    } catch { /* missing is fine */ }
+    try {
+      brief = await readFile(join(runDir, 'brief.md'), 'utf8');
+    } catch { /* missing is fine */ }
+    try {
+      const files = await readdir(runDir);
+      judgeCount = files.filter((n) => /^judge-\d+\.md$/.test(n)).length;
+    } catch { /* missing */ }
+  }
+
+  let wallMin = null;
+  if (startedAt) {
+    const start = Date.parse(startedAt);
+    const end = endedAt ? Date.parse(endedAt) : Date.now();
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+      wallMin = Math.round((end - start) / 60000);
+    }
+  }
+  return { startedAt, endedAt, wallMin, judgeCount, brief, runDir };
+}
+
+async function getInstances() {
+  const roles = await listRoles();
+  const all = await collectForges();
+  const out = [];
+  for (const role of roles) {
+    out.push(await buildInstance(role, all));
+  }
+  return out;
+}
+
+// Merge whatever we can read from host.yml / probe.json / classify.json
+// into one shape the UI can render as a full-width card. Missing files are
+// reported in `sources` so the UI can render an explicit empty-state hint
+// rather than a card full of dashes.
+async function buildInstance(role, allForges) {
+  const host = await readHostYaml(role);
+  const probe = await readProbeJson(role);
+  const classify = await readClassifyJson(role);
+  const forges = (allForges || []).filter((f) => f.role === role);
+  const counts = countByStatus(forges);
+
+  const activeModels = Array.isArray(host.active_models)
+    ? host.active_models
+    : (host.active_models ? [host.active_models] : []);
+
+  // Merge classify.models (with per-model params) with active_models
+  // (which names the ones currently live on the host).
+  const classifyModels = Array.isArray(classify?.models) ? classify.models : [];
+  const models = classifyModels.length
+    ? classifyModels.map((m) => ({
+        slug: m.slug || m.name || null,
+        hfModel: m.hf_model || null,
+        engine: m.engine || null,
+        port: m.port ?? null,
+        contextTokens: m.max_model_len ?? m.context_tokens ?? null,
+        maxNumSeqs: m.max_num_seqs ?? null,
+        vramEstimateGib: m.vram_estimate_gib ?? null,
+        tier: m.tier || null,
+        quant: m.quant || null,
+        active: activeModels.includes(m.slug) || activeModels.includes(m.name),
+      }))
+    : activeModels.map((slug) => ({ slug, active: true }));
+
+  return {
+    role,
+    connection: host.connection || null,
+    installedAt: host.installed_at || null,
+    verdict: host.verdict || classify?.supported === false ? host.verdict || 'unsupported' : host.verdict || (classify ? 'supported' : null),
+    engine: {
+      kind: host.engine || classify?.engine || null,
+      reason: classify?.reason || null,
+      host: classify?.host || null,
+    },
+    gpu: probe?.gpu
+      ? {
+          vendor: probe.gpu.vendor || inferVendorFromRole(role),
+          model: probe.gpu.model || null,
+          vramGib: probe.gpu.vram_gib ?? null,
+          gttGib: probe.gpu.gtt_gib ?? null,
+          driver: probe.gpu.driver || null,
+        }
+      : (inferVendorFromRole(role)
+          ? { vendor: inferVendorFromRole(role), model: null, vramGib: null, gttGib: null, driver: null }
+          : null),
+    os: probe?.os
+      ? {
+          pretty: probe.os.pretty || null,
+          kernel: probe.os.kernel || null,
+          arch: probe.os.arch || null,
+        }
+      : null,
+    memory: probe?.mem_total_gib != null ? { totalGib: probe.mem_total_gib } : null,
+    docker: probe?.docker
+      ? {
+          present: !!probe.docker.present,
+          usable: !!probe.docker.usable,
+          version: probe.docker.version || null,
+          runtimes: Array.isArray(probe.docker.runtimes) ? probe.docker.runtimes : [],
+        }
+      : null,
+    vulkan: probe?.vulkan
+      ? {
+          present: !!probe.vulkan.present,
+          device: probe.vulkan.device || null,
+        }
+      : null,
+    arithmetic: Array.isArray(classify?.arithmetic) ? classify.arithmetic : [],
+    warnings: Array.isArray(classify?.warnings) ? classify.warnings : [],
+    activeModels,
+    models,
+    counts,
+    sources: {
+      hostYaml: existsSync(join(LMSTACK_HOME, role, 'host.yml')),
+      probeJson: probe != null,
+      classifyJson: classify != null,
+    },
+  };
+}
+
+function countByStatus(forges) {
+  const c = { running: 0, in_review: 0, queued: 0, merged: 0, failed: 0, cleaned: 0, stale: 0 };
+  for (const f of forges) {
+    if (f.status === 'in-review') c.in_review++;
+    else if (f.status in c) c[f.status]++;
+  }
+  return c;
+}
+
+async function getInstance(role) {
+  const host = await readHostYaml(role);
+  const probe = await readProbeJson(role);
+  return { role, host, probe };
+}
+
+async function getForges(filters) {
+  let all = await collectForges();
+  if (filters.role) all = all.filter((f) => f.role === filters.role);
+  if (filters.status) all = all.filter((f) => f.status === filters.status);
+  // sort: running first, then in-review, then queued, then completed
+  const order = { running: 0, 'in-review': 1, stale: 2, queued: 3, failed: 4, merged: 5, cleaned: 6 };
+  all.sort((a, b) => (order[a.status] ?? 99) - (order[b.status] ?? 99) || a.key.localeCompare(b.key));
+  return all;
+}
+
+async function getForge(key) {
+  const roles = await listRoles();
+  let task = null;
+  let role = null;
+  for (const r of roles) {
+    const tasks = await readTasksForRole(r);
+    const found = tasks.find((t) => t && t.key === key);
+    if (found) { task = found; role = r; break; }
+  }
+  if (!task) {
+    // Fall back to ledger lookup so a cleaned-up task is still viewable.
+    const ledger = await readLedger();
+    const led = ledger.reverse().find((r) => r.key === key);
+    if (!led) throw new Error(`unknown forge key: ${key}`);
+    task = { key, host_role: led.host_role, tier: led.tier, shape: led.shape, pr: led.pr, status: 'cleaned' };
+    role = led.host_role;
+  }
+  const slug = keyToSlug(key);
+  const aliveSlugs = await liveTmuxSessions();
+  const tmuxAlive = aliveSlugs.has(slug);
+  const meta = await runMeta(slug);
+
+  // Judge rounds
+  const judgeRounds = [];
+  if (existsSync(meta.runDir)) {
+    const files = (await readdir(meta.runDir)).filter((n) => /^judge-\d+\.md$/.test(n))
+      .sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]));
+    for (const name of files) {
+      const n = Number(name.match(/\d+/)[0]);
+      const text = await readFile(join(meta.runDir, name), 'utf8');
+      judgeRounds.push({ n, text });
+    }
+  }
+
+  const worktreePath = join(LMSTACK_HOME, 'worktrees', slug);
+  const worktreeExists = existsSync(worktreePath);
+  const branch = `lmstack/${slug}`;
+
+  // Ledger record for this key (most recent)
+  const ledger = await readLedger();
+  const led = [...ledger].reverse().find((r) => r.key === key) || null;
+
+  return {
+    role,
+    slug,
+    task,
+    run: {
+      exists: existsSync(meta.runDir),
+      brief: meta.brief,
+      judgeRounds,
+      startedAt: meta.startedAt,
+      endedAt: meta.endedAt,
+      tmuxAlive,
+      worktreePath,
+      worktreeExists,
+      branch,
+    },
+    ledger: led,
+  };
+}
+
+async function getLog(key, which, tail) {
+  const slug = keyToSlug(key);
+  const path = join(LMSTACK_HOME, 'runs', slug, `${which}.log`);
+  if (!existsSync(path)) return { lines: [], sizeBytes: 0, truncated: false, exists: false, path };
+  const s = statSync(path);
+  const size = s.size;
+  const window = Math.min(size, 64 * 1024);
+  const start = size - window;
+  const fd = openSync(path, 'r');
+  const buf = Buffer.alloc(window);
+  readSync(fd, buf, 0, window, start);
+  closeSync(fd);
+  const text = stripAnsi(buf.toString('utf8'));
+  const allLines = text.split(/\r?\n/);
+  // If we didn't read from byte 0, the first partial line is likely truncated — drop it.
+  const linesTrimmed = start > 0 && allLines.length > 0 ? allLines.slice(1) : allLines;
+  const kept = linesTrimmed.slice(-tail).filter((l, i, arr) => !(i === arr.length - 1 && l === ''));
+  return { lines: kept, sizeBytes: size, truncated: start > 0 || linesTrimmed.length > tail, exists: true, path };
+}
+
+// Strip CSI/OSC/other ANSI escape sequences that tmux `pipe-pane` emits.
+// Terminal transcripts are otherwise unreadable when rendered as plain text.
+function stripAnsi(s) {
+  // CSI sequences: ESC [ ... final-byte
+  let out = s.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
+  // OSC sequences: ESC ] ... BEL  or  ESC ] ... ESC \
+  out = out.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
+  // Two-byte escapes (SS2/SS3/RIS/etc.) and stray ESC
+  out = out.replace(/\x1b[@-Z\\-_]/g, '');
+  return out;
+}
+
+async function getLedger(filters) {
+  const all = await readLedger();
+  let out = all.slice().reverse(); // newest first
+  if (filters.shape) out = out.filter((r) => r.shape === filters.shape);
+  if (filters.outcome) out = out.filter((r) => r.outcome === filters.outcome);
+  if (filters.role) out = out.filter((r) => r.host_role === filters.role);
+  if (filters.limit) out = out.slice(0, filters.limit);
+  return out;
+}
+
+// ─── reply helpers ──────────────────────────────────────────────────────────
+
+function replyJson(res, obj) {
+  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.end(JSON.stringify(obj));
+}
+function replyError(res, code, message) {
+  res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({ error: message }));
+}
+
+// ─── tiny fs helpers ────────────────────────────────────────────────────────
+
+async function writeFile(path, text) {
+  const fs = await import('node:fs/promises');
+  await fs.writeFile(path, text);
+}
+async function rm(path) {
+  const fs = await import('node:fs/promises');
+  await fs.rm(path, { force: true });
+}
+function unlinkSyncSafe(path) {
+  try { unlinkSync(path); } catch {}
+}
+async function waitFor(pred, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try { if (await pred()) return true; } catch {}
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return false;
+}

@@ -258,6 +258,30 @@ the local-only story from end to end.
 Finish by telling the user what they now have and that `/lmstack:harvest` is
 what turns it into work.
 
+## Phase 7 — Start the read-only UI
+
+The last step brings up the local web UI so the user can watch instances and
+forges without attaching to tmux. It reads only from `~/.lmstack/`; it never
+mutates state.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/bin/lmstack-ui" start
+```
+
+`start` is idempotent — if the server is already running (from a prior install
+or a manual start) it prints the URL and exits 0. Include the printed
+`http://127.0.0.1:<port>/` in the finish message so the user can click through.
+
+If the command fails because the SPA has not been built (`ui/dist/` missing —
+only happens in a source checkout, not in a released plugin), print the error
+and the build hint it emits, but **do not abort the install**. The install has
+already succeeded; the UI is a convenience layer on top of it. The user can
+start it later with `lmstack-ui start` once the SPA is built, or with
+`lmstack-ui foreground` to debug.
+
+The daemon lives until reboot or explicit `lmstack-ui stop`. There is no
+systemd/launchd unit — start it again after a reboot if you want it back.
+
 ## Logging
 
 Every phase writes one line through `lmstack-log`, which redacts before it
