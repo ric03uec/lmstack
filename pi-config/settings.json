@@ -1,4 +1,11 @@
 {
+  "defaultProvider": "lmstack-h2",
+  "defaultModel": "qwen2.5-coder-7b",
+  "quietStartup": true,
+  "enableInstallTelemetry": false,
+  "warnings": {
+    "anthropicExtraUsage": false
+  },
   "packages": [
     "extensions/lmstack-h1.ts",
     "extensions/lmstack-h2.ts",

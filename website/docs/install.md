@@ -3,11 +3,33 @@ sidebar_position: 2
 title: Install the skill
 ---
 
+import CopyPrompt from '@site/src/components/CopyPrompt';
+
 # Install the skill
 
-This page is addressed to a coding agent. If you are a person: type
-*install the lmstack skill from https://ric03uec.github.io/lmstack/install*
-in Claude Code, opencode, or pi, and your agent will do what follows.
+<CopyPrompt>install the lmstack skill from https://ric03uec.github.io/lmstack/install</CopyPrompt>
+
+Paste that into pi, Claude Code, or opencode. Your agent will do the rest.
+
+Everything below this line is addressed to that agent. If you are it, read the
+whole page before you touch anything.
+
+## Prerequisites the user needs
+
+lmstack expects three things on the control host. If any are missing, tell the
+user which and how to install them, and stop.
+
+| Tool | Check | Install with |
+|---|---|---|
+| **pi** | `command -v pi` | `curl -fsSL https://pi.dev/install.sh \| sh` |
+| **Ansible** | `command -v ansible-playbook` | `uv tool install ansible-core` |
+| **tmux** | `command -v tmux` | User's package manager (`apt install tmux`, `brew install tmux`, etc.) |
+| `git`, `make`, `python3`, `jq` | `command -v` each | Usually already present; the user's package manager if not |
+
+pi is not optional. The skill's final step is to wire pi at the new endpoint,
+and without pi installed the demo ends at a working `curl` rather than a
+working editor. Do not skip it and do not try to substitute another editor
+without asking.
 
 ---
 

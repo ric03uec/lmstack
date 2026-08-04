@@ -1,13 +1,44 @@
 ---
 slug: /
 sidebar_position: 1
-title: Introduction
+title: Put your GPU to use
 ---
 
-# lmstack
+# Put your GPU to use
 
-A local LLM stack for development: models served on hardware you own, behind one
-OpenAI-compatible endpoint, wired into your editor.
+Your GPU is idle right now. lmstack turns it into a coding endpoint your editor
+talks to like any other provider — no cloud tokens, no rate limits, no data
+leaving the box.
+
+Bring a DGX Spark, a gaming desktop, or the AMD laptop you already own. The
+default catalog comes up on **8 GiB of VRAM**. More than that and the skill
+notices and offers you a bigger model.
+
+## Start here
+
+You need four things on the control host — the machine you write code on:
+
+- **pi** — `curl -fsSL https://pi.dev/install.sh | sh`
+- **Ansible** — `uv tool install ansible-core`
+- **tmux** — your package manager (`apt install tmux`, `brew install tmux`, etc.)
+- **A GPU host** — this machine, or one you can SSH to
+
+Then, inside pi (or Claude Code, or opencode), paste this:
+
+> install the lmstack skill from https://ric03uec.github.io/lmstack/install
+
+Followed by:
+
+> use the lmstack skill to give me a starting point
+
+The skill takes it from there — probe, classify, show you the diff, hand you
+any sudo commands, run the playbooks, wire pi at your new endpoint. Point it
+at a remote box by giving an SSH target instead of `localhost`.
+
+If you would rather do it yourself, the [Quickstart](quickstart) is the same
+work, done by hand.
+
+## What actually gets built
 
 ```
               control host — where you write code
@@ -93,11 +124,7 @@ blame on the repo.
 
 ## Where to go next
 
-Paste this at your coding agent and it will take it from there:
-
-> install the lmstack skill from https://ric03uec.github.io/lmstack/install
-
-- [Install the skill](install) — that page, including how to do it by hand.
+- [Install the skill](install) — the page you paste at your agent, and how to do it by hand.
 - [The skill](skill) — what the installer does at each phase, and what it refuses to do.
 - [Quickstart](quickstart) — the same work done explicitly, without an agent.
 - [Troubleshooting](operations/troubleshooting) — when the endpoint does not answer.

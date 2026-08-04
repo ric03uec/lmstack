@@ -1,10 +1,41 @@
-# lmstack
+# lmstack — put your GPU to use
 
-A local LLM stack you can actually develop against: a GPU host serving models
-behind one OpenAI-compatible endpoint, and a code editor already pointed at it.
+Your GPU is idle right now. lmstack turns it into a coding endpoint your editor
+talks to like any other provider — no cloud tokens, no rate limits, no data
+leaving the box.
 
 Bring a DGX Spark, a gaming desktop, or the AMD laptop you already own. The
-default catalog is sized to come up on **8 GB of VRAM**.
+default catalog comes up on **8 GB of VRAM**. If you have more, the skill
+notices and offers you more.
+
+## Quickstart
+
+You need four things on the control host — the machine you write code on:
+
+- **pi** — `curl -fsSL https://pi.dev/install.sh | sh`
+- **Ansible** — `uv tool install ansible-core`
+- **tmux** — your package manager (`apt install tmux`, `brew install tmux`, etc.)
+- **A GPU host** — this machine, or one you can SSH to
+
+Then, inside pi (or Claude Code, or opencode), paste this:
+
+> install the lmstack skill from https://ric03uec.github.io/lmstack/install
+
+That URL is written for your agent to read, not for you. It tells it what to
+fetch and where to put it. Then:
+
+> use the lmstack skill to give me a starting point
+
+The skill probes the target's hardware, picks a model that fits, shows you
+every file it wants to write, hands you any sudo commands it needs, and runs
+the playbooks. **Nothing to clone first** — it does that itself, once you say
+where.
+
+Point it at a remote box by giving it an SSH target instead of `localhost`.
+Working on lmstack rather than using it? Clone it and run `make skill-install`,
+which points the skill at your clone instead of fetching its own copy.
+
+## What actually gets built
 
 ```
               control host — where you write code
@@ -34,26 +65,7 @@ default catalog is sized to come up on **8 GB of VRAM**.
 
 Only `:4000` leaves either box. The engines and Postgres bind loopback, and a
 test fails the build if a template ever stops doing that. A second active model
-is a second engine container, on `:8002`.
-
-## Quickstart
-
-You are already sitting in Claude Code, opencode, or pi. Type this:
-
-> install the lmstack skill from https://ric03uec.github.io/lmstack/install
-
-That page is written for your agent to read, not for you. It tells it what to
-fetch and where to put it. Then:
-
-> use the lmstack skill to give me a starting point
-
-The skill asks which host to target, probes its hardware, picks a model that
-fits the VRAM it found, shows you every file it wants to write, and runs the
-playbooks. **Nothing to clone first** — it does that itself, once you say where.
-
-Working on lmstack rather than using it? Clone it and run `make skill-install`,
-which points the installed skill at your clone instead of fetching its own.
-[Install the skill](https://ric03uec.github.io/lmstack/install) covers both.
+is a second engine container on `:8002`.
 
 ## What runs where
 

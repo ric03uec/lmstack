@@ -16,10 +16,16 @@ point.
 - A GPU host: NVIDIA with a working driver, or AMD with `amdgpu` loaded. At
   least 8 GiB of usable GPU memory.
 - SSH access to it, or it is the machine you are sitting at.
-- On the control host: `git`, `make`, `jq`, `python3`, and Ansible.
+- On the control host: `git`, `make`, `jq`, `python3`, `tmux`, **pi**, and **Ansible**.
 
-Install Ansible with `uv tool install ansible-core`. You do not need Docker on
-the GPU host — bootstrap installs it.
+```bash
+curl -fsSL https://pi.dev/install.sh | sh    # pi
+uv tool install ansible-core                  # Ansible
+# tmux via your package manager: apt install tmux / brew install tmux / etc.
+```
+
+pi is the editor lmstack wires at the end. You do not need Docker on the GPU
+host — bootstrap installs it there.
 
 ## Set up the control host
 

@@ -8,6 +8,18 @@ title: pi
 The control host is where you write code. It needs no GPU — only the address of
 a host that has one, and a key.
 
+## Install pi first
+
+```bash
+curl -fsSL https://pi.dev/install.sh | sh
+```
+
+The Windows and package-manager variants are on [pi.dev](https://pi.dev/). pi
+is a prereq, not a recommendation: `make pi-install` writes into
+`~/.pi/agent/` and needs that directory structure to exist.
+
+## Point it at lmstack
+
 ```bash
 make pi-install
 $EDITOR ~/.pi/agent/extensions/.env    # host URL + LiteLLM key
@@ -78,3 +90,27 @@ the next sync, and they skip the check.
 Both providers serve `qwen2.5-coder-7b`. Moving from the laptop to the DGX is a
 provider change and nothing else — no prompt changes, no model name changes, no
 per-host branching in whatever you have built on top.
+
+## What lmstack turns off in pi
+
+The `settings.json` this repo ships is intentionally lean — a fresh pi loaded
+with lmstack should start in the fewest tokens of context possible, so the
+local model has room for your work rather than for pi's own scaffolding.
+
+| Setting | Value | Why |
+|---|---|---|
+| `defaultProvider` | `lmstack-h2` | Pre-selects the lmstack provider so the picker never appears at startup. Change to `lmstack-h1` if that is your primary. |
+| `defaultModel` | `qwen2.5-coder-7b` | Same. Skips the model prompt. |
+| `enableInstallTelemetry` | `false` | No install/update ping to `pi.dev`. |
+| `quietStartup` | `true` | Hides the startup header. |
+| `warnings.anthropicExtraUsage` | `false` | Not relevant when there is no Anthropic provider registered. |
+
+pi's cloud providers (Anthropic, OpenAI, Codex, GitHub Copilot, etc.) do not
+load unless you `/login` to them or set their API-key env vars, so lmstack does
+not need to disable them explicitly — they simply do not appear. If you want a
+pi that speaks only to lmstack, don't `/login` and don't export those keys.
+
+Merge semantics still apply. If your existing `settings.json` already sets any
+of these, `make pi-install` leaves your value in place — same rule as with
+`packages`. Delete the key from your settings if you want the lmstack default
+back.

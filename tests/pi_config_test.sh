@@ -98,7 +98,8 @@ mkdir -p "$target"
 cat > "$target/settings.json" <<'EOF'
 {
   "packages": ["npm:pi-hud", "extensions/my-own-thing.ts"],
-  "quietStartup": true
+  "theme": "light",
+  "defaultProvider": "anthropic"
 }
 EOF
 
@@ -110,16 +111,43 @@ else
   bad "the merge dropped a package the user already had"
 fi
 
-if jq -e '.quietStartup == true' "$target/settings.json" >/dev/null; then
+if jq -e '.theme == "light"' "$target/settings.json" >/dev/null; then
   ok "an unrelated settings key survives the merge"
 else
   bad "the merge dropped an unrelated settings key"
+fi
+
+# User's value must win on a key we also own. Someone with defaultProvider
+# already set to anthropic should not have it silently rewritten by us.
+if jq -e '.defaultProvider == "anthropic"' "$target/settings.json" >/dev/null; then
+  ok "user's value wins over ours on an owned settings key"
+else
+  bad "the merge overwrote the user's defaultProvider with ours"
 fi
 
 if jq -e '.packages | index("extensions/lmstack-h1.ts")' "$target/settings.json" >/dev/null; then
   ok "the lmstack entries were added"
 else
   bad "the lmstack entries were not added"
+fi
+
+# -- Lean defaults seed a fresh pi -------------------------------------------
+# On an empty target our tracked defaults should flow through, so a user who
+# just installed pi and lmstack lands in a lean state without extra steps.
+rm -rf "$target"
+mkdir -p "$target"
+run install >/dev/null 2>&1
+
+if jq -e '.defaultProvider == "lmstack-h2"' "$target/settings.json" >/dev/null; then
+  ok "fresh install seeds defaultProvider from the tracked settings"
+else
+  bad "fresh install did not seed defaultProvider"
+fi
+
+if jq -e '.enableInstallTelemetry == false' "$target/settings.json" >/dev/null; then
+  ok "fresh install disables install telemetry"
+else
+  bad "fresh install left install telemetry enabled"
 fi
 
 run install >/dev/null 2>&1

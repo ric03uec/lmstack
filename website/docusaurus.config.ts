@@ -9,7 +9,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'lmstack',
-  tagline: 'A local LLM stack behind one OpenAI-compatible endpoint',
+  tagline: 'Put your GPU to use.',
   favicon: 'img/favicon.svg',
 
   url: 'https://ric03uec.github.io',

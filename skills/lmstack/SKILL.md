@@ -35,6 +35,11 @@ about more than the install succeeding.
 6. **Stop on an unsupported host.** Explain why and what would change the
    verdict. Do not fall back to CPU inference; it is slow enough to look broken
    and the user will blame the repo.
+7. **Never run a sudo command yourself.** Print it, explain what it changes,
+   wait for the user to run it and paste back the output. This is not a
+   permissions issue — it is a trust one. The user must be able to see, on
+   their own screen, what is about to touch their machine before it happens.
+   The full pattern is in [Phase 6](#phase-6--run).
 
 ## Phase 0 — Find the repository
 
@@ -71,18 +76,32 @@ git clone https://github.com/ric03uec/lmstack "$LMSTACK_REPO"
 This is the only git command in the skill. Do not run it without asking, and do
 not clone over a directory that already has something in it.
 
-Then check the control host has what the playbooks need:
+Then check the control host has what the playbooks and the final wiring need:
 
 ```bash
 cd "$LMSTACK_REPO"
-for t in make python3 jq ansible-playbook; do
+for t in make python3 jq tmux ansible-playbook pi; do
   command -v "$t" >/dev/null || echo "missing: $t"
 done
 ```
 
-`ansible-playbook` is the one most likely to be missing. Install it with
-`uv tool install ansible-core` — not pipx, not the system package manager — then
-fetch the collections the playbooks import:
+Three are usually the ones missing. For each, tell the user which and hand
+them the exact command — you do not run these yourself, because they need
+sudo or write to `$HOME`:
+
+| Missing tool | Command to hand the user |
+|---|---|
+| `ansible-playbook` | `uv tool install ansible-core` (not pipx, not the system package manager) |
+| `pi` | `curl -fsSL https://pi.dev/install.sh \| sh` |
+| `tmux` | Their package manager: `apt install tmux`, `brew install tmux`, `dnf install tmux`, etc. |
+
+pi is not optional. Phase 7 wires it at the endpoint the earlier phases build,
+and a run that ends with no editor pointed at the stack is a run that failed
+to deliver on what the user asked for. Do not skip it and do not substitute
+another editor without asking.
+
+Wait for the user to confirm each install completed, then continue. Once every
+tool resolves, fetch the collections the playbooks import:
 
 ```bash
 make deps
@@ -216,18 +235,35 @@ make up        HOST=<role>
 make verify    HOST=<role>
 ```
 
-`bootstrap` installs packages, so it needs sudo. If the probe reported
-`"sudo": "password"` — which is normal on a local connection — it must be run
-with `-K` and `make` cannot supply that:
+**Any command that needs sudo, you hand to the user.** You do not run it. This
+is not about permissions — it is about the user being able to see, on their
+own screen, exactly what is about to touch their machine before it happens.
+Every sudo command is a small trust ask, and the answer is theirs to give.
+
+The pattern for any sudo step:
+
+1. Print the exact command, in a fenced block, ready to copy.
+2. Explain in one sentence what it will change (packages installed, groups
+   added, files written).
+3. Wait for the user to run it and paste the result — the last few lines of
+   output, or the summary line.
+4. Read the pasted output to decide whether to continue. Do not assume it
+   succeeded because they said "done".
+
+`bootstrap` is the main one. When the probe reported `"sudo": "password"` —
+normal on a local connection — `make bootstrap` cannot pipe the password in,
+so the command to hand over is:
 
 ```bash
 ansible-playbook -i inventory/hosts.ini hosts/<role>/ansible/00-bootstrap.yml -K
 ```
 
-Hand that command to the user to run rather than trying to feed a password.
+If it reported `"sudo": "passwordless"` — normal on a remote host with a
+configured SSH user — `make bootstrap HOST=<role>` works directly. Still show
+it to the user first; still wait for confirmation.
 
 Expect `make up` to take a long time on a first run: it downloads model weights.
-That is not a hang.
+That is not a hang. It does not need sudo — you can run it.
 
 Interpret failures against `references/troubleshooting.md` before reporting
 them. Log each stage:
@@ -245,11 +281,35 @@ verification against a stack that did not come up.
 
 Point the user's editor at the new endpoint.
 
+First, re-verify pi is installed — a lot has happened since Phase 0 and it may
+have been a different session:
+
 ```bash
-make pi-install          # merges into ~/.pi/agent; it does not replace it
+command -v pi >/dev/null || echo "pi missing"
 ```
 
-Then the user fills `~/.pi/agent/extensions/.env` with the host URL and the
+If missing, hand the user the install command and wait — do not skip this
+phase. The whole point of the skill is to land at a working editor.
+
+```bash
+curl -fsSL https://pi.dev/install.sh | sh
+```
+
+Then install the lmstack pi configuration:
+
+```bash
+make pi-install
+```
+
+That merges lmstack's providers, statusline, and lean defaults into
+`~/.pi/agent/`. It never overwrites a value the user has already set — same
+rule as with an existing `packages` entry. The lean defaults it seeds
+(`defaultProvider`, `quietStartup`, `enableInstallTelemetry: false`) exist so
+pi starts in as few tokens of context as possible, leaving the 16k window for
+the user's work rather than for pi's own scaffolding. See
+`website/docs/control-host/pi.md` for the full list.
+
+The user then fills `~/.pi/agent/extensions/.env` with the host URL and the
 LiteLLM key. Same rule as Phase 5: you do not read that file and you do not
 ask them to paste it.
 
@@ -260,9 +320,11 @@ pi --list-models | grep lmstack
 pi -p --provider lmstack-h2 --model qwen2.5-coder-7b "reply with the word ok"
 ```
 
-If the user works in Claude Code or opencode rather than pi, see
-`pi-config/bridges/README.md` — opencode talks to LiteLLM directly, Claude Code
-goes through `bin/lmstack-ask`.
+If the user has explicitly said they work in Claude Code or opencode instead
+of pi, see `pi-config/bridges/README.md` — opencode talks to LiteLLM directly,
+Claude Code goes through `bin/lmstack-ask`. But confirm before taking that
+path: the default is to wire pi, because pi is the one editor that stays
+inside the local-only story from end to end.
 
 If the host serves a model the extension does not advertise, `make validate`
 fails with T0.10. Fix it by editing `pi-config/extensions/`, not by editing the

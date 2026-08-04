@@ -33,6 +33,20 @@ readonly OWNED_PACKAGES=(
   "npm:@narumitw/pi-statusline"
 )
 
+# Non-package settings this repo ships as defaults. On install these seed a
+# fresh pi; the user's value wins on any subsequent conflict, so someone who
+# has already tuned pi does not lose it. On dump we never capture the user's
+# override back into the tracked file — the tracked file is a statement of
+# what lmstack thinks a lean pi should look like, not a mirror of the live
+# machine.
+readonly OWNED_SETTINGS_KEYS=(
+  "defaultProvider"
+  "defaultModel"
+  "quietStartup"
+  "enableInstallTelemetry"
+  "warnings"
+)
+
 die()  { printf 'pi-sync: %s\n' "$1" >&2; exit 1; }
 step() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 ok()   { printf '  ok  %s\n' "$1"; }
@@ -73,17 +87,29 @@ show_diff() {
 
 owned_json() { printf '%s\n' "${OWNED_PACKAGES[@]}" | jq -Rn '[inputs]'; }
 
-# The user's packages, with ours appended. `unique` would reorder the list and
-# pi loads packages in order, so dedupe by hand instead.
+# Two rules, applied in one jq pass:
+#
+#   1. Non-package keys: our tracked defaults are the base, the user's file
+#      overlays on top. `A * B` in jq recursively merges with B winning on any
+#      leaf, so someone who has already set defaultProvider keeps their value
+#      and someone who has not gets ours.
+#
+#   2. Packages: `unique` would reorder the list and pi loads packages in
+#      order, so dedupe by hand instead. The user's entries stay in the order
+#      they were in; ours append after.
 merged_settings() {
   local existing="$1"
-  local base='{"packages":[]}'
-  [[ -f "$existing" ]] && base="$(cat "$existing")"
-  jq --argjson owned "$(owned_json)" '
-    .packages = (
-      ((.packages // []) + $owned)
-      | reduce .[] as $p ([]; if index($p) then . else . + [$p] end)
-    )' <<<"$base"
+  local ours="$SCRIPT_DIR/settings.json"
+  local user_json='{}'
+  [[ -f "$existing" ]] && user_json="$(cat "$existing")"
+  jq -n --argjson owned "$(owned_json)" \
+        --slurpfile ours "$ours" \
+        --argjson user "$user_json" \
+    '($ours[0] * $user)
+     | .packages = (
+         ((($user.packages // [])) + $owned)
+         | reduce .[] as $p ([]; if index($p) then . else . + [$p] end)
+       )'
 }
 
 # Their dependencies win on conflict for anything we do not own; ours win for
@@ -175,9 +201,17 @@ dump_config() {
   # Only the owned entries come back, and machine-local state is dropped.
   # Capturing the whole file would drag the user's unrelated packages into a
   # public repo, which is both noise and a small privacy leak.
-  jq --argjson owned "$(owned_json)" \
-    '{packages: [(.packages // [])[] | select(. as $p | $owned | index($p))]}' \
-    "$TARGET/settings.json" > "$tmp/settings.json"
+  #
+  # Non-package keys are NOT captured from live at all — the tracked file is
+  # our statement of what a lean pi should look like, not a mirror of the live
+  # machine. If we captured them, a user who set `quietStartup: false` for
+  # themselves and then dumped would push that override back into the repo.
+  jq -n --argjson owned "$(owned_json)" \
+        --slurpfile ours "$SCRIPT_DIR/settings.json" \
+        --slurpfile live "$TARGET/settings.json" \
+    '$ours[0]
+     | .packages = [($live[0].packages // [])[] | select(. as $p | $owned | index($p))]' \
+    > "$tmp/settings.json"
 
   # Keep our dependency set; take versions from the live tree where it has
   # them. A package the user added for themselves does not become ours.
