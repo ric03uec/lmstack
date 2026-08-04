@@ -2,14 +2,24 @@
 # T0.11 — alias parity across engines.
 #
 # The point of lmstack is that the control host does not care which engine
-# served a model. `qwen2.5-coder-7b` must mean the same thing whether it came
-# from vLLM on an NVIDIA card or llama.cpp on an AMD iGPU, so pi-config,
-# Claude Code, and opencode need no per-host branching.
+# served a model. When two hosts share a required alias, `pi --provider …`
+# is the only thing that changes when you swap them.
 #
 # Adding a host to this list commits it to serving every alias below.
+#
+# The list is empty right now, on purpose. h2-amd was on it (both hosts
+# served qwen2.5-coder-7b), until we found that llama.cpp's chat parser
+# cannot extract tool calls from Qwen 2.5 Coder's markdown-fenced output
+# under any quant or chat-template combination we tried, so h2 switched
+# to Hermes 3 (which obeys <tool_call> priming). vLLM on h1 has no such
+# issue — xgrammar handles the schema-constrained tool decoding server-side.
+# Full write-up in docs/tool-calling-on-h2-amd.md.
+#
+# Restore parity by finding a coder model that tool-calls cleanly under
+# llama.cpp AND is competitive under vLLM, or by shipping a wrapper that
+# rewrites fenced tool calls before they leave message.content.
 
-required_common_aliases:
-  - qwen2.5-coder-7b
+required_common_aliases: []
 
 hosts:
   - h1-nvidia

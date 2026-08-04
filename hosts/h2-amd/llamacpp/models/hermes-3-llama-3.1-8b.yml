@@ -1,0 +1,47 @@
+---
+slug: hermes-3-llama-3.1-8b
+engine: llamacpp
+hf_repo: NousResearch/Hermes-3-Llama-3.1-8B-GGUF
+hf_file: Hermes-3-Llama-3.1-8B.Q4_K_M.gguf
+image: ghcr.io/ggml-org/llama.cpp:server-vulkan
+port: 8001
+context: 32768
+n_gpu_layers: 999
+parallel_slots: 1
+extra_args:
+  - --chat-template-file
+  - /templates/chatml-tools.jinja
+  - --flash-attn
+  - "on"
+vram_estimate_gib: 8
+tier: 8g
+mandatory: true
+virtual_models:
+  - name: hermes-3-llama-3.1-8b
+  - name: Hermes-3-Llama-3.1-8B
+notes: |
+  Default model for h2-amd. Chosen for tool calling: Hermes 3 is fine-tuned
+  on a heavy tool-use mix and reliably emits <tool_call>…</tool_call> XML
+  tags that llama.cpp's chat parser extracts into a real tool_calls array.
+
+  Qwen 2.5 Coder 7B was tried first (see docs/tool-calling-on-h2-amd.md).
+  It wraps calls in ```json / ```bash markdown fences regardless of quant
+  (Q4_K_M, Q6_K) or template priming (--jinja, custom chatml-tools.jinja),
+  because coder-tuned models default to fencing code-shaped output. The
+  wrappers land in message.content and no tool ever runs. Hermes obeys the
+  priming; Qwen does not. Dropped from the active set on this host.
+
+  Q4_K_M ~4.6 GiB weights, KV ~3.5 GiB at 32k (GQA, 8 kv-heads, 32 layers)
+  totals ~8 GiB — right at the tier ceiling. Real ceiling on an APU is
+  the GTT pool (30 GiB on this Krackan), so the tier check is
+  conservative, not physical. Bump vram_budget_gib to 10 if you add a
+  second small model alongside.
+
+  Context 32k rather than the Llama 3.1 native 128k: pi's default tool
+  schemas + system prompt land ~17k input tokens; 32k leaves working
+  headroom without doubling KV memory. Raise it if you plan long
+  agent sessions with cumulative history.
+
+  Chat template bind-mounted at /templates/chatml-tools.jinja. See the
+  compose file. --flash-attn on because Vulkan supports it on RDNA3/3.5
+  and it speeds prompt eval measurably.

@@ -40,16 +40,18 @@ export default function (pi: ExtensionAPI) {
     api: "openai-completions",
     models: [
       {
-        id: "qwen2.5-coder-7b",
-        name: "Qwen2.5 Coder 7B Q4_K_M (h2-amd, llama.cpp)",
+        id: "hermes-3-llama-3.1-8b",
+        name: "Hermes 3 Llama 3.1 8B Q4_K_M (h2-amd, llama.cpp)",
         reasoning: false,
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        // Larger than h1-nvidia's 16k on purpose: the unified-memory APU has
-        // enough GTT for the extra KV cache, and pi's system prompt + tool
-        // schemas alone land around 17k input tokens — 16k here would clamp
-        // every tools-mode call to zero-length responses. The alias is still
-        // parity with h1; only the runtime budget differs.
+        // Hermes was picked for h2-amd specifically because it obeys the
+        // <tool_call>…</tool_call> tag priming that llama.cpp's chat parser
+        // extracts. Qwen 2.5 Coder wraps calls in ```json fences that the
+        // parser refuses to unwrap; see docs/tool-calling-on-h2-amd.md.
+        // Alias parity with h1-nvidia is deliberately broken here — h1
+        // serves qwen2.5-coder-7b under vLLM, which handles tool calling
+        // through xgrammar and doesn't need the same trick.
         contextWindow: 32768,
         maxTokens: 4096,
       },

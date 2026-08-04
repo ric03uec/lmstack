@@ -20,14 +20,15 @@
 # the compose network. Postgres publishes nothing. Tests T1.3, T1.4 and T3.8
 # enforce this; it is not a convention.
 services:
-  llama-qwen2.5-coder-7b:
-    container_name: llama-qwen2.5-coder-7b
+  llama-hermes-3-llama-3.1-8b:
+    container_name: llama-hermes-3-llama-3.1-8b
     image: ghcr.io/ggml-org/llama.cpp:server-vulkan
     restart: unless-stopped
     ports:
       - "127.0.0.1:8001:8080"
     volumes:
       - /home/lmstack/.lmstack/models-gguf:/models:ro
+      - /home/lmstack/.lmstack/templates:/templates:ro
     devices:
       - /dev/dri/renderD128:/dev/dri/renderD128
     group_add:
@@ -44,14 +45,15 @@ services:
       - --port
       - "8080"
       - -m
-      - /models/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
+      - /models/Hermes-3-Llama-3.1-8B.Q4_K_M.gguf
       - -c
       - "32768"
       - -ngl
       - "999"
       - -np
       - "1"
-      - "--jinja"
+      - "--chat-template-file"
+      - "/templates/chatml-tools.jinja"
       - "--flash-attn"
       - "on"
 
@@ -95,7 +97,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      llama-qwen2.5-coder-7b:
+      llama-hermes-3-llama-3.1-8b:
         condition: service_started
 
 volumes:

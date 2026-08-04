@@ -24,4 +24,4 @@ litellm_store_prompts: false
 vram_budget_gib: 8
 
 active_models:
-  - qwen2.5-coder-7b
+  - hermes-3-llama-3.1-8b

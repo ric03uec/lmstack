@@ -17,19 +17,19 @@
 # list items collapse onto one line and LiteLLM silently serves fewer aliases
 # than you declared. T1.5 exists because that happened.
 model_list:
-  - model_name: qwen2.5-coder-7b
+  - model_name: hermes-3-llama-3.1-8b
     model_info:
       max_input_tokens: 32768
     litellm_params:
-      model: openai/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF
-      api_base: http://llama-qwen2.5-coder-7b:8080/v1
+      model: openai/NousResearch/Hermes-3-Llama-3.1-8B-GGUF
+      api_base: http://llama-hermes-3-llama-3.1-8b:8080/v1
       api_key: dummy
-  - model_name: Qwen2.5-Coder-7B-Instruct
+  - model_name: Hermes-3-Llama-3.1-8B
     model_info:
       max_input_tokens: 32768
     litellm_params:
-      model: openai/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF
-      api_base: http://llama-qwen2.5-coder-7b:8080/v1
+      model: openai/NousResearch/Hermes-3-Llama-3.1-8B-GGUF
+      api_base: http://llama-hermes-3-llama-3.1-8b:8080/v1
       api_key: dummy
 
 litellm_settings:
