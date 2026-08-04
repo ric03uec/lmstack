@@ -76,10 +76,14 @@ The gates above refer to these. Only T0 and T1 run without hardware.
 | T3 | Bring-up: health gates, aliases served | a host with a GPU |
 | T4 | Control host: pi providers, sync, bridges | T4.1 and T4.6 offline; the rest need a running host |
 | T5 | Negative: over-budget, missing secret, unauthenticated request | a host |
-| T6 | Skill: probe classification, install path binding, logging discipline | T6.1–T6.3 offline |
+| T6 | Skill: probe classification, install path binding, logging discipline | T6.1–T6.2 offline |
 | T7 | Template: layout parity, no drift from the reference host, instantiation | nothing |
+| T8 | Plugin and marketplace manifests, skill name uniqueness, no build-time path placeholder | nothing |
+| T9 | Sanitizer strips invisible and bidi codepoints, task store invariants | nothing |
+| T10 | Forge drives tmux, ledger never fabricates a duration | nothing |
+| T11 | Cleanup reclaims finished worktrees and branches, refuses to touch unmerged work or main | nothing |
 
-`make test` is T0, T1, T4.1, T4.6, T6.1–T6.3, and T7 — everything that can be
-proven without hardware, and what CI runs on every pull request. The rest are a
-manual checklist in `PLAN.md`, because a test that needs a GPU and forty minutes
-is not a test anyone runs.
+`make test` is T0, T1, T4.1, T4.6, T6.1, T6.2, T7, T8, T9, T10, T11 — everything
+that can be proven without hardware, and what CI runs on every pull request. The
+rest are a manual checklist in `PLAN.md`, because a test that needs a GPU and
+forty minutes is not a test anyone runs.
