@@ -176,19 +176,69 @@ backstop against mistakes, not a licence to log untrusted text.
 
 ## Step 6 — Report
 
-Show the queue as a table: key, tier, complexity, one-line reason. Lead with
-`T1`, because that is the only tier that is dispatchable right now.
+Fill the template below verbatim. Prose invites the model to soften a verdict
+into a suggestion — a table forces a `park` to sit next to a `T1` and be
+justified in one line. Both matter to the reader: the `park` list is the record
+of what was already considered and rejected, which is the only reason
+re-harvesting an unchanged backlog is cheap.
+
+**One section per tier used**, in this order — omit an entry only if it is
+empty:
+
+    ## Harvest — `<owner>/<repo>`
+
+    Scanned `<N>` open issues. **`<T1 count>` dispatchable now, `<T2 count>` after decomposition, `<park count>` parked, `<TRAP count>` traps.**
+
+    Sanitizer stripped `<nothing | a bidi override in #NN | ...>`.
+
+    ### T1 — dispatch now
+
+    | Key | Shape | Cx | Why it fits |
+    |---|---|---|---|
+    | `#NN` | `<shape>` | `<cx>` | one line: files named + precedent path |
+
+    ### T2 — dispatchable after decomposition
+
+    | Key | Shape | Cx | What to split off first |
+    |---|---|---|---|
+    | `#NN` | `<shape>` | `<cx>` | one line: the specific carve-out |
+
+    ### park
+
+    | Key | Why parked |
+    |---|---|
+    | `#NN` | one line: the specific reason from the record |
+
+    ### TRAP
+
+    | Key | Why it must not be dispatched |
+    |---|---|
+    | `#NN` | the specific harm |
+
+    ### Next step
+
+    `<a single dispatch command | a specific carve-out to file first | "nothing to run">`.
+
+Rules the template enforces, do not paper over them:
+
+- **The Why column is the same string you passed to `--reason`.** If it doesn't fit
+  in one line here, it was too vague there — go back and rewrite it, don't
+  reword it for the report.
+- **Lead with `T1`**, then `T2`, then `park`, then `TRAP`. `T1` is the only tier
+  a reader can act on now; the others are context.
+- **Omit an empty section entirely** rather than printing an empty table. An
+  empty `## T1` heading is worse than none because a reader still scans it.
+- **The Next step is a single command or "nothing to run".** Do not offer a
+  menu of options and do not dispatch — that is the user's per-task decision.
+- **Never lower the bar to give the GPU something to do.** "No T1 items and here
+  is what to split first" is a complete answer.
+
+The task tool prints the same records as JSON when you want to double-check the
+Why column matches the stored reason:
 
 ```bash
 lmstack-task list --host "$ROLE"
 ```
-
-Then state the honest total — "3 of 10 are in reach" — and name the next step,
-`/lmstack:exec <key>`. Do not start it. Harvesting is a survey; running the work
-is a separate decision the user makes per task.
-
-If the `T1` list is empty, say that and stop. Suggesting the user relax their
-standards to give the GPU something to do is backwards.
 
 ## References
 
