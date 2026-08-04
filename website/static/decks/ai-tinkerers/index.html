@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" id="theme" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.css" />
   <link rel="stylesheet" href="../lmstack.css" />
 </head>
 <body>
@@ -23,6 +24,7 @@
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/markdown/markdown.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.17.0/dist/bundle/asciinema-player.min.js"></script>
   <script>
     Reveal.initialize({
       hash: true,
@@ -34,6 +36,37 @@
       height: 720,
       margin: 0.06,
       plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
+    });
+
+    Reveal.on('ready', () => {
+      const seen = new WeakSet();
+
+      // Players are created lazily, when their slide is first shown. Creating
+      // them all up front means a recording has already looped several times
+      // by the time you reach it.
+      const mount = (slide) => {
+        if (!slide || !window.AsciinemaPlayer) return;
+        slide.querySelectorAll('.demo-player[data-cast]').forEach((el) => {
+          if (seen.has(el)) return;
+          // fit: 'width' measures the container once, at create time. If the
+          // slide has not been laid out yet the container is 0px wide and the
+          // terminal collapses to a couple of rows. Wait for layout, and if it
+          // still has no width leave it unseen so the next visit retries.
+          requestAnimationFrame(() => {
+            if (seen.has(el) || el.clientWidth === 0) return;
+            seen.add(el);
+            AsciinemaPlayer.create(el.dataset.cast, el, {
+              autoPlay: true,
+              loop: true,
+              theme: 'monokai',
+              fit: 'width',
+            });
+          });
+        });
+      };
+
+      mount(Reveal.getCurrentSlide());
+      Reveal.on('slidechanged', (e) => mount(e.currentSlide));
     });
   </script>
 </body>

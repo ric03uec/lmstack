@@ -109,7 +109,185 @@
 /* Diagram slides: SVG fills the slide, minimal chrome. */
 .reveal section.diagram { text-align: center; padding-top: 0; }
 .reveal section.diagram h2 { font-size: 1.1em; margin-bottom: 0.3em; text-align: left; }
-.reveal section.diagram .stack-svg { width: 100%; height: auto; max-height: 82vh; }
+/* Sized in px, not vh: Reveal scales a fixed 1280x720 stage, so vh units are
+   viewport-relative and let the SVG grow past the bottom of the slide.
+   The wrapper <p> (markdown gives us one) is zeroed out because an inline
+   image inherits the paragraph line-height and adds ~55px of baseline slack. */
+.reveal section.diagram p { margin: 0; line-height: 0; }
+.reveal section.diagram .stack-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 600px;
+  margin: 0 auto;
+}
+
+/* Versus slides: two stacks side by side, revealed one fragment at a time.
+   The columns are deliberately unequal — the cloud stack is three boxes and
+   needs no room; the local stack is the argument and gets the space. */
+.reveal section.versus { text-align: center; padding-top: 0; }
+.reveal section.versus h2 { font-size: 1.1em; margin-bottom: 0.5em; text-align: left; }
+.reveal .versus-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.85fr;
+  gap: 2em;
+  /* start, not center: the two column headings must sit on the same baseline,
+     otherwise the short cloud column floats to the middle of the slide. */
+  align-items: start;
+}
+.reveal .versus-grid .col { min-width: 0; }
+.reveal .versus-grid h3 {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.6em;
+  color: var(--lm-muted);
+  text-transform: none;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--lm-rule);
+  padding-bottom: 0.4em;
+  margin: 0 0 0.8em;
+}
+.reveal .versus-grid img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 600px;
+  margin: 0;
+  border: none;
+  box-shadow: none;
+  background: none;
+}
+
+/* Demo slides: asciinema-player embed, sized to fit within the slide.
+   One rule per player instance — see index.html, players are mounted lazily
+   on slidechanged and keyed off .demo-player[data-cast]. */
+.reveal section.demo h2 { font-size: 1.2em; margin-bottom: 0.4em; }
+.reveal .demo-player {
+  /* Width, not height, is the real control here: the players are created with
+     fit:'width', so the player sizes its own height from the container width.
+     At the full 1280 the natural height of a 100x22 cast plus its control bar
+     is 672px, which overflowed the 620 cap and clipped the bottom row.
+     1280 * (620/672) ~= 1181, so capping the width lands the height at ~619.
+     The max-height stays as a guard, not as the mechanism. */
+  max-width: 1180px;
+  max-height: 640px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+/* Problem slides: the claim, then what makes it true. */
+.reveal section.problem h2 { font-size: 1.5em; margin-bottom: 0.7em; }
+.reveal section.problem .kicker {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--lm-accent-strong);
+  font-weight: 600;
+  border-top: 1px solid var(--lm-rule);
+  padding-top: 0.6em;
+  margin-top: 0.6em;
+}
+/* The claim + evidence + kicker has to clear 720px on its own. */
+.reveal section.problem blockquote { margin-bottom: 0.6em; }
+.reveal section.problem > ul { margin-bottom: 0; }
+.reveal section.problem > ul li { margin-bottom: 0.35em; }
+
+/* Two-column body, used by problem and proof slides. */
+.reveal .two-up {
+  display: flex;
+  gap: 2.2em;
+  align-items: flex-start;
+}
+.reveal .two-up .col { flex: 1 1 0; min-width: 0; }
+.reveal .two-up h3 {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--lm-accent-strong);
+  font-size: 1em;
+  border-bottom: 1px solid var(--lm-rule);
+  padding-bottom: 0.35em;
+  margin-bottom: 0.6em;
+}
+.reveal .two-up p { font-size: 0.8em; margin: 0.4em 0; }
+.reveal .muted { color: var(--lm-muted); }
+
+/* Solution slides: one lead claim, then the mechanics. */
+.reveal section.solution h2 { font-size: 1.25em; margin-bottom: 0.4em; }
+.reveal section.solution .lead {
+  font-size: 1.05em;
+  color: var(--lm-fg);
+  border-left: 3px solid var(--lm-accent);
+  padding-left: 0.8em;
+  margin: 0 0 0.9em 0;
+}
+.reveal section.solution li { font-size: 0.78em; margin-bottom: 0.3em; }
+
+/* Inline pipeline strip, for the classifier slide. */
+.reveal .pipeline {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  flex-wrap: wrap;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.72em;
+  margin: 0.4em 0 1em 0;
+}
+.reveal .pipeline > span {
+  background: var(--lm-panel);
+  border: 1px solid var(--lm-rule);
+  border-radius: 4px;
+  padding: 0.4em 0.8em;
+}
+.reveal .pipeline .arrow {
+  background: transparent;
+  border: none;
+  color: var(--lm-accent);
+  padding: 0;
+}
+.reveal .pipeline .hot {
+  background: var(--lm-accent-soft);
+  border-color: var(--lm-accent);
+  color: var(--lm-accent-strong);
+  font-weight: 600;
+}
+
+/* Proof slide: two screenshots side by side with captions. */
+.reveal section.proof h2 { font-size: 1.3em; margin-bottom: 0.5em; }
+.reveal section.proof img {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  border: 1px solid var(--lm-rule);
+  border-radius: 4px;
+  background: var(--lm-panel);
+}
+.reveal section.proof .cap {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.62em;
+  color: var(--lm-muted);
+  margin-top: 0.5em;
+  text-align: center;
+}
+
+/* A repo URL under the heading, above the screenshot. Small on purpose: it is
+   there so the audience can write it down, not to compete with the image. */
+.reveal section.proof .repo-link {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.62em;
+  margin: 0 0 0.5em;
+  text-align: center;
+}
+.reveal section.proof .repo-link a { color: var(--lm-accent-strong); }
+
+/* One screenshot, not two. Height is the binding constraint here, not width:
+   the clawrium PR crop is 1216x660, so capping height at 470 leaves the image
+   ~865px wide — still readable from the back of a room — and buys the headroom
+   the repo-link line needs. At 560 the caption collided with Reveal's slide
+   counter in the bottom-right corner. */
+.reveal section.proof.single { text-align: center; }
+.reveal section.proof.single img {
+  width: auto;
+  max-width: 100%;
+  max-height: 470px;
+  margin: 0 auto;
+}
 
 /* Definition slide: centered term with meaning + punchline.
    Background motif: anvil silhouette + embers, very low opacity. */
@@ -183,12 +361,24 @@
   justify-content: center;
   align-items: center;
 }
-.reveal section.closer h1 { font-size: 1.8em; margin-bottom: 0.4em; white-space: nowrap; }
+/* nowrap keeps the equation on one line, so the size has to fit the stage:
+   33 characters at 1.8em measured ~1540px against a 1280px stage and was
+   clipped at both edges. 1.35em lands at ~1150px. Lengthen the title and
+   this needs recomputing — check the horizontal extent, not just the bottom. */
+.reveal section.closer h1 { font-size: 1.35em; margin-bottom: 0.4em; white-space: nowrap; }
 .reveal section.closer img {
   max-height: 340px;
   margin: 0.4em 0;
   border: 1px solid var(--lm-rule);
   border-radius: 6px;
+}
+.reveal section.closer .hashtag {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.95em;
+  font-weight: 600;
+  color: var(--lm-accent-strong);
+  letter-spacing: 0.02em;
+  margin-top: 0.35em;
 }
 .reveal section.closer .links {
   font-family: 'JetBrains Mono', ui-monospace, monospace;

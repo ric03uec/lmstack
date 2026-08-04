@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" role="img" aria-label="LMStack workflow: analyze, install, then a loop between harvest and exec">
+  <defs>
+    <marker id="arrow-wf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2d6f88" />
+    </marker>
+    <style>
+      .box  { fill: #ffffff; stroke: #2d6f88; stroke-width: 2; }
+      .box-soft { fill: #e0eef4; stroke: #2d6f88; stroke-width: 2; }
+      .cmd  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 24px; font-weight: 600; fill: #1f4d5e; text-anchor: middle; }
+      .sub  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; fill: #64748b; text-anchor: middle; }
+      .phase { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; fill: #64748b; letter-spacing: 0.04em; }
+      .loop-lbl { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; font-weight: 600; fill: #2d6f88; text-anchor: middle; }
+      .flow { stroke: #2d6f88; stroke-width: 2.5; fill: none; }
+      .dashed { stroke: #cbd5e1; stroke-width: 1.5; stroke-dasharray: 6 6; fill: none; }
+      .side { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; fill: #64748b; }
+    </style>
+  </defs>
+
+  <!-- phase labels -->
+  <text class="phase" x="120" y="110">ONE TIME</text>
+  <line class="dashed" x1="120" y1="125" x2="560" y2="125" />
+  <text class="phase" x="660" y="110">EVERY DAY</text>
+  <line class="dashed" x1="660" y1="125" x2="1120" y2="125" />
+
+  <!-- analyze -->
+  <rect class="box" x="90" y="250" width="200" height="110" rx="8" />
+  <text class="cmd" x="190" y="300">analyze</text>
+  <text class="sub" x="190" y="330">what will this GPU run?</text>
+
+  <line class="flow" x1="290" y1="305" x2="360" y2="305" marker-end="url(#arrow-wf)" />
+
+  <!-- install -->
+  <rect class="box" x="360" y="250" width="200" height="110" rx="8" />
+  <text class="cmd" x="460" y="300">install</text>
+  <text class="sub" x="460" y="330">engine + gateway, one host</text>
+
+  <line class="flow" x1="560" y1="305" x2="650" y2="305" marker-end="url(#arrow-wf)" />
+
+  <!-- harvest -->
+  <rect class="box-soft" x="650" y="250" width="200" height="110" rx="8" />
+  <text class="cmd" x="750" y="300">harvest</text>
+  <text class="sub" x="750" y="330">classify repo work</text>
+
+  <!-- exec -->
+  <rect class="box-soft" x="920" y="250" width="200" height="110" rx="8" />
+  <text class="cmd" x="1020" y="300">exec</text>
+  <text class="sub" x="1020" y="330">run a task, open a PR</text>
+
+  <!-- forward edge harvest -> exec -->
+  <line class="flow" x1="850" y1="285" x2="920" y2="285" marker-end="url(#arrow-wf)" />
+  <text class="loop-lbl" x="885" y="268">T1…Tn</text>
+
+  <!-- return edge exec -> harvest (the loop) -->
+  <path class="flow" d="M1020,360 L1020,430 L750,430 L750,360" marker-end="url(#arrow-wf)" />
+  <text class="loop-lbl" x="885" y="455">merged work changes the queue</text>
+
+  <text class="side" x="90" y="560">Two commands to stand it up. Two you live in.</text>
+</svg>

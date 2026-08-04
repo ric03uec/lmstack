@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" role="img" aria-label="Capability gap between a local 27B model and a frontier cloud model">
+  <defs>
+    <style>
+      .bar-local { fill: #e0eef4; stroke: #2d6f88; stroke-width: 2; }
+      .bar-cloud { fill: #2d6f88; stroke: #1f4d5e; stroke-width: 2; }
+      .val  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 19px; font-weight: 600; fill: #1f4d5e; text-anchor: middle; }
+      .sub  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; fill: #64748b; }
+      .axis { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 17px; font-weight: 600; fill: #0f172a; text-anchor: middle; }
+      .note { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; fill: #64748b; text-anchor: middle; }
+      .rule { stroke: #e2e8f0; stroke-width: 1; }
+      .base { stroke: #0f172a; stroke-width: 2; }
+      .side { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 16px; fill: #64748b; }
+      .tbd  { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; fill: #ea580c; }
+      /* .note centres its text; this variant right-aligns. A class is required
+         because a CSS declaration beats a text-anchor presentation attribute. */
+      .note-end { text-anchor: end; }
+    </style>
+  </defs>
+
+  <!-- legend -->
+  <rect class="bar-local" x="60" y="28" width="22" height="16" rx="2" />
+  <text class="sub" x="92" y="42">Qwen3-27B — local, 8 GB VRAM</text>
+  <rect class="bar-cloud" x="470" y="28" width="22" height="16" rx="2" />
+  <text class="sub" x="502" y="42">Sonnet 4.8 — frontier, cloud</text>
+  <text class="note note-end" x="1140" y="42">context window: 200 K on both — not the gap</text>
+
+  <!-- gridlines -->
+  <line class="rule" x1="60" y1="140" x2="1140" y2="140" />
+  <line class="rule" x1="60" y1="253" x2="1140" y2="253" />
+  <line class="rule" x1="60" y1="366" x2="1140" y2="366" />
+
+  <!-- baseline -->
+  <line class="base" x1="60" y1="480" x2="1140" y2="480" />
+
+  <!-- GROUP 1: parameters -->
+  <rect class="bar-local" x="155" y="426" width="90" height="54" rx="3" />
+  <text class="val" x="200" y="414">27 B</text>
+  <rect class="bar-cloud" x="275" y="140" width="90" height="340" rx="3" />
+  <text class="val" x="320" y="128">~undisclosed</text>
+  <text class="axis" x="260" y="510">parameters</text>
+  <text class="note" x="260" y="532">order of magnitude apart</text>
+
+  <!-- GROUP 2: reasoning — the actual gap -->
+  <rect class="bar-local" x="495" y="432" width="90" height="48" rx="3" />
+  <text class="val" x="540" y="420">one hop</text>
+  <rect class="bar-cloud" x="615" y="140" width="90" height="340" rx="3" />
+  <text class="val" x="660" y="128">chains hops</text>
+  <text class="axis" x="600" y="510">reasoning</text>
+  <text class="note" x="600" y="532">can it decompose the problem itself?</text>
+
+  <!-- GROUP 3: multi-step tool use -->
+  <rect class="bar-local" x="835" y="410" width="90" height="70" rx="3" />
+  <text class="val" x="880" y="398">brittle</text>
+  <rect class="bar-cloud" x="955" y="140" width="90" height="340" rx="3" />
+  <text class="val" x="1000" y="128">holds a plan</text>
+  <text class="axis" x="940" y="510">multi-step tool use</text>
+  <text class="note" x="940" y="532">dozens of calls without losing the thread</text>
+
+  <text class="side" x="60" y="586">Same interface. Not the same worker.</text>
+  <text class="tbd" x="1140" y="586" text-anchor="end">numbers: placeholder — fill in</text>
+</svg>
