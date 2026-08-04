@@ -31,7 +31,7 @@ help: ## Show this help
 # ---------------------------------------------------------------------------
 
 .PHONY: test
-test: validate validator-test redaction-test render-test template-test classify-test plugin-test harvest-test exec-test pi-config-test lint ## Run the full offline suite (T0, T1, T4.1, T4.6, T6.1, T6.2, T7, T8, T9, T10)
+test: validate validator-test redaction-test render-test template-test classify-test plugin-test harvest-test exec-test reap-test pi-config-test lint ## Run the full offline suite (T0, T1, T4.1, T4.6, T6.1, T6.2, T7, T8, T9, T10, T11)
 
 .PHONY: validate
 validate: ## Validate host and model configuration (T0.3-T0.13)
@@ -64,6 +64,10 @@ plugin-test: ## Validate the plugin manifest and its skills (T8)
 .PHONY: harvest-test
 harvest-test: ## Prove the sanitizer strips and the task store holds its invariants (T9)
 	@./tests/harvest_test.sh
+
+.PHONY: reap-test
+reap-test: ## Prove cleanup never destroys unmerged work or touches main (T11)
+	@./tests/reap_test.sh
 
 .PHONY: exec-test
 exec-test: ## Prove the forge drives tmux and the ledger never fabricates a duration (T10)

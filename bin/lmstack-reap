@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# Return a finished run to a clean state: kill the session, remove the worktree,
+# drop the branch, mark the task `cleaned`.
+#
+# This exists as a tested command rather than as instructions in the skill
+# because it deletes things, it runs unattended during `--sweep`, and the repo it
+# is deleting from is the user's own checkout with their work in it. Prose told
+# the orchestrator to run `git branch -D`; prose has already proved insufficient
+# once in this project, when a brief that forbade pushing did not forbid `gh` and
+# an agent closed a live issue.
+#
+# Three invariants, checked here rather than trusted:
+#
+#   * A worktree is only removed if it sits under the state dir. Anything else is
+#     the user's own checkout.
+#   * A branch is only deleted if it is named `lmstack/<slug>`. Never `main`,
+#     never anything a person made.
+#   * Deletion is `git branch -d`, never `-D`. An unmerged branch survives and
+#     gets reported. Unattended force-deletion of unmerged commits is how work
+#     disappears.
+#
+# Every step is idempotent, so a partly-reaped run can be reaped again. A step
+# that cannot be completed safely is reported and skipped; it never aborts the
+# rest, or one stuck worktree would strand every task behind it.
+#
+# Usage:
+#   lmstack-reap --host <role> --key <key> [--force] [--dry-run]
+#   lmstack-reap --host <role> --all [--force] [--dry-run]
+#
+# `--force` removes a worktree with uncommitted changes. It still will not
+# force-delete an unmerged branch — nothing does.
+#
+# Env:
+#   LMSTACK_STATE_DIR   override ~/.lmstack (used by tests)
+
+set -uo pipefail
+
+die() { printf 'lmstack-reap: %s\n' "$1" >&2; exit 2; }
+
+STATE_DIR="${LMSTACK_STATE_DIR:-$HOME/.lmstack}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TASK="$HERE/lmstack-task"
+FORGE="$HERE/lmstack-forge"
+
+host=""; key=""; all=false; force=false; dry_run=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --host)    host="${2:-}"; shift 2 ;;
+    --key)     key="${2:-}";  shift 2 ;;
+    --all)     all=true;      shift ;;
+    --force)   force=true;    shift ;;
+    --dry-run) dry_run=true;  shift ;;
+    -h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)         die "unknown argument: $1" ;;
+  esac
+done
+
+[[ -n "$host" ]] || die "--host is required"
+if $all && [[ -n "$key" ]]; then die "--all and --key are mutually exclusive"; fi
+if ! $all && [[ -z "$key" ]]; then die "--key is required (or --all)"; fi
+
+say() { printf '%s\n' "$1"; }
+
+# The command's own chatter is suppressed here rather than at the call sites,
+# because a `run ... >/dev/null` at the call site swallows the `would:` line too
+# and a dry run then reports actions it did not describe.
+run() {
+  if $dry_run; then say "    would: $*"; return 0; fi
+  "$@" >/dev/null 2>&1
+}
+
+# In a dry run nothing happened, so nothing may be reported in the past tense.
+# `run` has already printed the exact command, which says it more precisely than
+# a second English sentence would.
+did() { $dry_run || say "    $1"; }
+
+slug_for() { printf '%s' "${1//[#.]/-}"; }
+
+# A task is only reapable once it has reached a terminal state. `in-review` is
+# excluded on purpose: the PR is open, reviewers ask for changes, and the live pi
+# session still holds the context needed to make them.
+reapable() {
+  case "$1" in
+    merged|failed) return 0 ;;
+    *)             return 1 ;;
+  esac
+}
+
+reap_one() {
+  local k="$1" slug rec status repo wt branch rc=0
+  slug="$(slug_for "$k")"
+
+  rec="$("$TASK" get --host "$host" --key "$k" 2>/dev/null)" || {
+    say "  $k: no task record; nothing to reap"
+    return 0
+  }
+
+  status="$(printf '%s' "$rec" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))' 2>/dev/null)"
+  repo="$(printf '%s' "$rec" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("repo_path","") or "")' 2>/dev/null)"
+
+  if ! reapable "$status"; then
+    say "  $k: status '$status' is not terminal; left alone"
+    return 0
+  fi
+
+  say "  $k ($status)"
+
+  # tmux first. A live session holds the worktree's shell open, and on some
+  # filesystems that alone is enough to make the removal fail.
+  if "$FORGE" status --key "$k" >/dev/null 2>&1; then
+    run "$FORGE" kill --key "$k" && did "session killed"
+  else
+    say "    session already gone"
+  fi
+
+  wt="$STATE_DIR/worktrees/$slug"
+
+  # The guard is on the resolved path, not the constructed one: a key that
+  # escaped its own character class, or a symlinked state dir, must not let this
+  # remove a directory outside where forges live.
+  if [[ -d "$wt" ]]; then
+    local real_wt real_root
+    real_wt="$(cd "$wt" && pwd -P 2>/dev/null)"
+    real_root="$(cd "$STATE_DIR/worktrees" && pwd -P 2>/dev/null)"
+    if [[ -z "$real_wt" || "$real_wt" != "$real_root"/* ]]; then
+      say "    REFUSED: '$wt' resolves outside $real_root; not removing"
+      rc=1
+    elif [[ -z "$repo" || ! -d "$repo/.git" && ! -f "$repo/.git" ]]; then
+      say "    cannot find the repo this worktree belongs to; leaving $wt in place"
+      rc=1
+    else
+      local dirty
+      dirty="$(git -C "$wt" status --porcelain 2>/dev/null)"
+      if [[ -n "$dirty" ]] && ! $force; then
+        say "    worktree has uncommitted changes; kept. Re-run with --force to discard:"
+        printf '%s\n' "$dirty" | sed 's/^/      /'
+        rc=1
+      else
+        local args=(worktree remove "$wt")
+        $force && args=(worktree remove --force "$wt")
+        if run git -C "$repo" "${args[@]}"; then
+          did "worktree removed"
+        else
+          say "    worktree could not be removed; left at $wt"
+          rc=1
+        fi
+      fi
+    fi
+  else
+    say "    no worktree at $wt"
+    run git -C "${repo:-.}" worktree prune
+  fi
+
+  branch="lmstack/$slug"
+
+  # Belt and braces. The branch name is constructed above so it always has the
+  # prefix, but this is the check that stands between an unattended sweep and
+  # someone's `main`, so it is asserted rather than assumed.
+  if [[ "$branch" != lmstack/* ]]; then
+    say "    REFUSED: '$branch' is not an lmstack branch"
+    return 1
+  fi
+
+  if [[ -n "$repo" ]] && git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
+    # -d, never -D. Git refuses to drop commits that are not reachable from HEAD,
+    # which is exactly the outcome we want when a run failed: the branch stays,
+    # and the operator is told where it is.
+    #
+    # A dry run has to reach the same verdict without doing it, or it would
+    # promise a cleanup that the real run then refuses — and the promise is the
+    # part someone acts on.
+    local merged=false
+    git -C "$repo" branch --merged HEAD --list "$branch" 2>/dev/null | grep -q . && merged=true
+
+    if $merged; then
+      if run git -C "$repo" branch -d "$branch"; then
+        did "branch $branch deleted"
+      else
+        say "    branch $branch could not be deleted; kept at $repo"
+        rc=1
+      fi
+    else
+      say "    branch $branch has unmerged commits; kept at $repo"
+      say "      inspect: git -C $repo log HEAD..$branch"
+      rc=1
+    fi
+  else
+    say "    no branch $branch"
+  fi
+
+  # Only claim `cleaned` if everything actually came away. A task marked clean
+  # while its worktree is still on disk is worse than one left alone: the next
+  # sweep skips it and the directory is never reclaimed.
+  if [[ $rc -eq 0 ]]; then
+    run "$TASK" set --host "$host" --key "$k" --status cleaned \
+      && did "task marked cleaned"
+  else
+    say "    left as '$status'; re-run after resolving the above"
+  fi
+  return $rc
+}
+
+failed=0
+if $all; then
+  keys="$(
+    for st in merged failed; do
+      "$TASK" list --host "$host" --status "$st" --json 2>/dev/null \
+        | python3 -c 'import json,sys
+try: rows = json.load(sys.stdin)
+except Exception: rows = []
+for r in rows:
+    k = r.get("key")
+    if k: print(k)' 2>/dev/null
+    done | sort -u
+  )"
+  if [[ -z "$keys" ]]; then
+    say "nothing to reap on $host"
+    exit 0
+  fi
+  say "reaping on $host:"
+  while IFS= read -r k; do
+    [[ -n "$k" ]] || continue
+    reap_one "$k" || failed=$((failed + 1))
+  done <<< "$keys"
+else
+  say "reaping on $host:"
+  reap_one "$key" || failed=$((failed + 1))
+fi
+
+if [[ $failed -gt 0 ]]; then
+  say ""
+  say "$failed run(s) need attention; nothing was force-deleted."
+  exit 1
+fi
+exit 0

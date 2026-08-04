@@ -33,6 +33,7 @@ None of these need a host, a GPU, or a network.
 | `make plugin-test` | The plugin and marketplace manifests are valid, every skill declares a name, and no skill still carries a build-time path placeholder. |
 | `make harvest-test` | The sanitizer strips invisible and bidi codepoints, and the task store stops harvest and exec overwriting each other's fields. |
 | `make exec-test` | The forge drives real tmux windows, and the ledger reports an unknown duration rather than inventing one. |
+| `make reap-test` | Cleanup reclaims finished worktrees and branches, and refuses to touch unmerged commits, a dirty worktree, or anything outside `~/.lmstack/`. |
 | `make pi-config-test` | The pi sync copies extensions, merges rather than overwrites, and round-trips. |
 | `make lint` | yamllint, shellcheck, ansible-lint at the production profile, playbook syntax, and a scan for secrets committed by accident. |
 

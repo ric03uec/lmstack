@@ -308,10 +308,13 @@ lmstack-task list --host "$ROLE" --status in-review
 lmstack-forge status
 ```
 
+Your job is to move each task to the right status. You do **not** hand-roll the
+cleanup:
+
 | Observed | Action |
 |---|---|
-| `in-review`, PR merged | mark `merged`; kill session; remove worktree and branch |
-| `in-review`, PR closed unmerged | mark `failed`; record why; clean up |
+| `in-review`, PR merged | `lmstack-task set --status merged`, then reap |
+| `in-review`, PR closed unmerged | `lmstack-task set --status failed`, record why, then reap |
 | `in-review`, PR still open | leave alone |
 | `running`, session live | leave alone; report the current round |
 | `running`, **no** live session | stale claim from a crashed run — return to `queued` |
@@ -319,15 +322,36 @@ lmstack-forge status
 That last row is the one that matters. Without it, a closed terminal strands a
 task as permanently in progress and every later harvest silently skips it.
 
+Then reap. One command per host does the whole thing:
+
 ```bash
-lmstack-forge kill --key "$KEY"
-git -C "$REPO_PATH" worktree remove "$WT"          # --force if dirty
-git -C "$REPO_PATH" branch -D "lmstack/$SLUG"      # only after a merge
+lmstack-reap --host "$ROLE" --all --dry-run   # read this before the real run
+lmstack-reap --host "$ROLE" --all
 ```
 
-Deleting a branch is destructive and the sweep does it unattended, so do it
-**only** on the merged path, where the commits are already in `main`. On any
-other outcome, leave the branch and say where it is.
+It kills the session, removes the worktree, deletes the branch and marks the task
+`cleaned` — but only for tasks in `merged` or `failed`, and only when each step
+actually succeeds. A run it could not fully clean stays in its old status and is
+reported, so the next sweep tries again rather than leaking the directory.
+
+**Do not reach past it with raw `git`.** The refusals are the feature:
+
+- An **unmerged branch is never deleted**, and `--force` does not change that.
+  `lmstack-reap` uses `git branch -d`, never `-D`. On a failed run that branch is
+  the only copy of the work.
+- A **dirty worktree is kept** and its diff printed. `--force` discards it, and
+  that is the only thing `--force` does.
+- A worktree that **resolves outside `~/.lmstack/worktrees/`** is refused
+  untouched — that is someone's own checkout, reached through a stale record or a
+  symlink.
+- Only branches named `lmstack/<slug>` are ever deleted.
+
+`--dry-run` prints the exact commands and predicts the same refusals the real run
+makes, so a plan that says a task will be cleaned means it will be.
+
+If reap reports a branch it kept, say where it is and stop. Do not offer to
+force-delete it; if the user wants it gone they can say so, and it is their call
+to make with the diff in front of them.
 
 ## References
 
