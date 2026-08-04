@@ -29,6 +29,7 @@ services:
       - "127.0.0.1:{{ m.port }}:8080"
     volumes:
       - {{ install_root }}/models-gguf:/models:ro
+      - {{ install_root }}/templates:/templates:ro
     devices:
       - {{ render_node }}:{{ render_node }}
     group_add:

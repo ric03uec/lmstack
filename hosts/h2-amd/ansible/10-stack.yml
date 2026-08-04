@@ -101,6 +101,7 @@
         - {path: models-gguf, mode: "0755"}
         - {path: litellm, mode: "0755"}
         - {path: models, mode: "0755"}
+        - {path: templates, mode: "0755"}
       loop_control:
         label: "{{ item.path }}"
 
@@ -114,6 +115,19 @@
         mode: "0644"
       with_fileglob:
         - "{{ engine_root }}/models/*.yml"
+      loop_control:
+        label: "{{ item | basename }}"
+
+    # Chat templates. Bind-mounted read-only into the llama-server containers
+    # at /templates; a model YAML that references one names it as
+    # /templates/<file>.jinja.
+    - name: Copy chat templates to the install root
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ install_root }}/templates/{{ item | basename }}"
+        mode: "0644"
+      with_fileglob:
+        - "{{ engine_root }}/templates/*.jinja"
       loop_control:
         label: "{{ item | basename }}"
 
