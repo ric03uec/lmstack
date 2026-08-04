@@ -81,5 +81,16 @@ assert_field amd-apu-6g  '.arithmetic | length > 2' true "small-card recommendat
 # the real ceiling. Reading the wrong one calls a working laptop unsupported.
 assert_field amd-apu-6g '.usable_gib' 6 "APU budget comes from GTT, not the VRAM carve-out"
 
+# NVIDIA unified memory (Grace Blackwell / Grace Hopper / Jetson) is the
+# analogue: nvidia-smi returns N/A for memory.total because there is no separate
+# framebuffer. The fixture stores what a correct probe reports — a real
+# vram_gib populated via CUDA. If the classifier miscounts this class of host
+# it calls a $4k box unsupported, which happened once and is what this catches.
+assert_field nvidia-gb10-unified '.supported'  true      "T6.2 GB10 unified memory is supported"
+assert_field nvidia-gb10-unified '.host_role'  h1-nvidia "T6.2 GB10 -> h1-nvidia"
+assert_field nvidia-gb10-unified '.usable_gib' 119       "T6.2 GB10 budget is the whole unified pool"
+assert_field nvidia-gb10-unified '.recommended | length > 0' true \
+  "T6.2 GB10 recommends at least the default"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

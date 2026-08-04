@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "os": {"id": "ubuntu", "version": "24.04", "pretty": "Ubuntu 24.04.4 LTS", "kernel": "6.17.0-1008-nvidia", "arch": "aarch64"},
+  "mem_total_gib": 119,
+  "gpu": {"vendor": "nvidia", "model": "NVIDIA GB10", "vram_gib": 119, "gtt_gib": null, "driver": "580.126.09"},
+  "dri_nodes": ["/dev/dri/renderD128"],
+  "vulkan": {"present": false, "device": null},
+  "docker": {"present": true, "usable": true, "version": "29.1.3", "runtimes": ["nvidia", "runc"]},
+  "sudo": "password"
+}

@@ -11,7 +11,7 @@ run against a host that has not been bootstrapped yet.
 | `os.id` / `os.version` | From `/etc/os-release`. Bootstrap adds the Docker apt repo for `os.version`, so a non-Debian family host will fail there. |
 | `os.kernel` | The amdgpu and NVIDIA driver both live in the kernel; a mismatch between kernel and driver shows up here first. |
 | `gpu.vendor` | `nvidia`, `amd`, or `none`. Decides the host role and nothing else. |
-| `gpu.vram_gib` | NVIDIA: total board memory. AMD: `mem_info_vram_total`, which on an APU is a small carve-out. |
+| `gpu.vram_gib` | NVIDIA discrete: total board memory from `nvidia-smi`. NVIDIA unified (Grace Blackwell, Grace Hopper, Jetson): the unified pool via `libcuda.cuMemGetInfo`, because `nvidia-smi` returns `N/A` for `memory.total` on those parts. AMD: `mem_info_vram_total`, which on an APU is a small carve-out. |
 | `gpu.gtt_gib` | AMD only. The share of system RAM the GPU may map. **On an APU this is the number that matters.** |
 | `gpu.driver` | NVIDIA driver version, or the literal `amdgpu`. Empty on NVIDIA means no usable driver. |
 | `dri_nodes` | The render nodes containers can be given. Empty on an AMD host is fatal. |
@@ -27,6 +27,13 @@ dedicated pool — 512 MiB or 2 GiB, set in the BIOS — and allocate everything
 through GTT from system RAM. A machine reporting `vram_gib: 2, gtt_gib: 29` can
 comfortably serve a 7B model. `lmstack-classify` takes the larger of the two for this
 reason. Reading the VRAM figure alone declares most AMD laptops unsupported.
+
+**`vram_gib: null` on a detected NVIDIA GPU is a probe bug, not a zero.** It
+means `nvidia-smi --query-gpu=memory.total` returned `N/A` (Grace Blackwell,
+Grace Hopper, Jetson) and the `libcuda.so` fallback also could not answer —
+usually because CUDA is not installed. Install CUDA (or the NVIDIA container
+runtime, which drops it in) and re-probe. Do not read `null` as 0 GiB and
+declare the host unsupported; that once called a DGX Spark a zero-VRAM box.
 
 **`gtt_gib` on a discrete card is not additional capacity.** A dGPU also reports
 a GTT budget, but spilling into it means transferring weights over PCIe per

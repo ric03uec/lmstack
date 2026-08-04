@@ -73,6 +73,33 @@ if have nvidia-smi && nvidia_out="$(nvidia-smi --query-gpu=name,memory.total,dri
   [[ "$vram_mib" =~ ^[0-9]+$ ]] && gpu_vram_gib=$(( vram_mib / 1024 ))
 fi
 
+# NVIDIA unified memory (Grace Blackwell / Grace Hopper / Jetson). nvidia-smi
+# returns N/A for memory.total on these parts because there is no separate
+# framebuffer — the GPU addresses system RAM. Ask CUDA instead: cuMemGetInfo is
+# the authoritative source for what a GPU can actually allocate, and it works
+# uniformly across discrete and unified-memory NVIDIA hardware.
+#
+# Only fired when the driver query answered but the memory number did not, so
+# discrete cards (where nvidia-smi already returned the right MiB) pay nothing.
+if [[ "$gpu_vendor" == "nvidia" && -z "$gpu_vram_gib" ]] && have python3; then
+  gpu_vram_gib="$(python3 - <<'PY' 2>/dev/null || true
+import ctypes, sys
+try:
+    cuda = ctypes.CDLL("libcuda.so")
+except OSError:
+    sys.exit(0)
+if cuda.cuInit(0) != 0: sys.exit(0)
+dev = ctypes.c_int()
+if cuda.cuDeviceGet(ctypes.byref(dev), 0) != 0: sys.exit(0)
+ctx = ctypes.c_void_p()
+if cuda.cuCtxCreate_v2(ctypes.byref(ctx), 0, dev) != 0: sys.exit(0)
+free, total = ctypes.c_size_t(), ctypes.c_size_t()
+if cuda.cuMemGetInfo_v2(ctypes.byref(free), ctypes.byref(total)) != 0: sys.exit(0)
+print(total.value // (1024 ** 3))
+PY
+)"
+fi
+
 # AMD. mem_info_vram_total is a dedicated pool on a discrete card and a small
 # carve-out on an APU, where the number that matters is mem_info_gtt_total —
 # the share of system RAM the GPU may map. Report both; the classifier decides.

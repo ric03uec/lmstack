@@ -15,9 +15,28 @@ costs the user an hour of bring-up before they find out.
 
 1. **Never run a sudo command yourself.** Nothing here needs one; if you find
    yourself reaching for it, you have gone past the boundary of this skill.
-2. **Do not guess hardware.** Every number comes from the probe. If the probe
-   could not determine something it emits `null`, and `null` is a finding to
-   report, not a gap to fill in from the machine's model name.
+2. **Do not guess hardware. Use the right tool per vendor, and never assume.**
+   Every number comes from the probe. Never substitute a specification you
+   looked up, a number the user remembers, or anything the machine's model
+   name "should" imply.
+
+   The right tool per vendor — the probe already uses these; the rule is here
+   so a reader who suspects the probe knows what to check:
+
+   | Case | Authoritative source |
+   |---|---|
+   | NVIDIA discrete | `nvidia-smi --query-gpu=memory.total` (MiB) |
+   | NVIDIA unified (Grace Blackwell, Grace Hopper, Jetson) | CUDA `cuMemGetInfo` via `libcuda.so` — nvidia-smi returns `N/A` on these parts and is not usable |
+   | AMD dGPU | `/sys/class/drm/card*/device/mem_info_vram_total` (bytes) |
+   | AMD APU | `/sys/class/drm/card*/device/mem_info_gtt_total` (bytes) — `vram_total` is a small carve-out and is the wrong number |
+
+   `null` is a finding, and its meaning depends on whether a GPU was detected:
+   - **`vendor: none`** — hardware absent or invisible to the kernel. Report and
+     stop.
+   - **Vendor set, `vram_gib: null`** — the probe found the GPU but the tool it
+     asked did not answer. That is a probe bug, not a hardware verdict. Report
+     which tool failed and stop; do not invent a number, and do not fall back
+     to reasoning from the GPU model name.
 3. **Do not second-guess the arithmetic.** `lmstack-classify` is a pure function
    of the probe and the model catalog. If its verdict looks wrong, the fix is a
    code change with a test, not an override in conversation.
