@@ -23,10 +23,9 @@ because it was learned the hard way there — check the `notes:` block.
    by inventory alias, never by IP or FQDN. Prompt and completion text is never
    recorded at all. `tests/redaction_test.sh` is the guard — extend it when you
    extend the writer.
-3. **Alias parity (goal).** A goal enforced by `tests/parity.yml` only for
-   hosts listed there, so control-host configuration is engine-agnostic.
-   That list is currently empty (h2-amd serves a different model than
-   h1-nvidia; see the header comment for why).
+3. **Alias parity (goal).** Enforced by `tests/parity.yml` only for the hosts
+   listed there; that list is currently empty. See the header comment for
+   why.
 4. **8 GB VRAM floor.** The default active set on every host must fit in 8 GiB.
    Larger configurations ship as non-default catalog entries.
 5. **The skill never runs git.** It shows a diff, writes on confirmation, and
