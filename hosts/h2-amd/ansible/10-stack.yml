@@ -175,13 +175,26 @@
              | default([''], true) | first }}
       no_log: true
 
-    # get_url skips a file already on disk, so a re-run is free. The retries are
-    # for HuggingFace's CDN, which drops long transfers often enough to matter on
-    # a 5 GiB file.
-    - name: Download GGUF weights
+    # A stat guard, not get_url's own skip-if-exists: HuggingFace's HEAD response
+    # for ?download=true varies enough (transfer-encoding, redirects) that
+    # get_url treats the local file as stale and re-fetches on every run. That
+    # costs 5 GiB of bandwidth per re-run, which is unacceptable. Presence on
+    # disk with a non-zero size is the contract instead. Delete the file to
+    # force a refresh.
+    - name: Check for GGUF weights already on disk
+      ansible.builtin.stat:
+        path: "{{ install_root }}/models-gguf/{{ item.hf_file }}"
+      register: gguf_stat
+      loop: "{{ models }}"
+      loop_control:
+        label: "{{ item.hf_file }}"
+
+    # Retries are for HuggingFace's CDN, which drops long transfers often enough
+    # to matter on a 5 GiB file.
+    - name: Download missing GGUF weights
       ansible.builtin.get_url:
-        url: "https://huggingface.co/{{ item.hf_repo }}/resolve/main/{{ item.hf_file }}?download=true"
-        dest: "{{ install_root }}/models-gguf/{{ item.hf_file }}"
+        url: "https://huggingface.co/{{ item.item.hf_repo }}/resolve/main/{{ item.item.hf_file }}?download=true"
+        dest: "{{ install_root }}/models-gguf/{{ item.item.hf_file }}"
         mode: "0644"
         headers: "{{ {'Authorization': 'Bearer ' + hf_token} if hf_token else omit }}"
         timeout: 60
@@ -189,9 +202,10 @@
       until: gguf_download is succeeded
       retries: 3
       delay: 15
-      loop: "{{ models }}"
+      loop: "{{ gguf_stat.results }}"
+      when: not item.stat.exists or item.stat.size == 0
       loop_control:
-        label: "{{ item.hf_file }}"
+        label: "{{ item.item.hf_file }}"
 
     # =========================================================================
     # Render
