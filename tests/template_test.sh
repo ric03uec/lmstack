@@ -93,7 +93,7 @@ for template in "${templates[@]}"; do
   cp "$REFERENCE/$ENGINE_DIR/models/qwen2.5-coder-7b.yml" \
      "$root/hosts/$host/$ENGINE_DIR/models/"
 
-  if out="$(python3 tests/validate_models.py --root "$root" 2>&1)"; then
+  if out="$(python3 tests/validate_models.py --no-state --root "$root" 2>&1)"; then
     ok "T7.3 instantiated template validates"
   else
     bad "T7.3 instantiated template fails validation"
@@ -112,7 +112,7 @@ done
 
 # -- T7.5 -------------------------------------------------------------------
 section "live catalog"
-if python3 tests/validate_models.py | grep -q -- '-template'; then
+if python3 tests/validate_models.py --no-state | grep -q -- '-template'; then
   bad "T7.5 a template is being validated as a real host"
 else
   ok "T7.5 templates are excluded from the live catalog"

@@ -10,7 +10,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 
-CLASSIFY="skills/lmstack/scripts/classify.py"
+CLASSIFY="bin/lmstack-classify"
 FIXTURES="tests/fixtures/probe"
 
 pass=0

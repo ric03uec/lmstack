@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -43,21 +42,17 @@ class CatalogError(Exception):
 def find_repo(explicit: Path | None) -> Path:
     """Locate the repository holding the model catalog.
 
-    The installed copy of this skill lives under the agent's skill directory, so
-    walking up from __file__ finds ~/.claude rather than the repo. The install
-    binds the real path into SKILL.md and the skill passes it in; the walk-up is
-    only the convenience case of running from a clone.
+    This script ships in the plugin's bin/, so the plugin root is always its own
+    parent. --repo stays for tests that point at a fixture tree.
     """
-    for candidate in (explicit, os.environ.get("LMSTACK_REPO"), Path(__file__).resolve().parents[3]):
+    for candidate in (explicit, Path(__file__).resolve().parents[1]):
         if not candidate:
             continue
         root = Path(candidate).expanduser().resolve()
         if (root / "hosts").is_dir():
             return root
     raise CatalogError(
-        "cannot find the lmstack repository. Pass --repo /path/to/lmstack, or set "
-        "LMSTACK_REPO. The installed skill does not sit inside the repo, so the "
-        "catalog has to be located explicitly."
+        "cannot find the lmstack model catalog. Pass --repo /path/to/lmstack."
     )
 
 
@@ -255,7 +250,7 @@ def main() -> int:
         "--repo",
         type=Path,
         help="path to the lmstack repository holding the model catalog "
-        "(default: $LMSTACK_REPO, else inferred from this script's location)",
+        "(default: inferred from this script's location)",
     )
     args = parser.parse_args()
 

@@ -14,30 +14,34 @@
 #                 session is a liability, not a feature. Opt in with -t.
 #   --no-session  one-shot calls should not leave session files behind.
 #
-# The default model is the alias every lmstack host serves, so the same command
-# works whichever host answers. That is what alias parity is for.
+# With no -m, the model is whatever the host reports first from /v1/models.
+# Hosts do not share a model alias — h1-nvidia serves a Qwen coder, h2-amd serves
+# Hermes for its tool calling — so a hardcoded default is wrong on one of them.
+#
+#   lmstack-ask -P lmstack-h2 --print-model   # resolve and exit; no prompt read
 
 set -uo pipefail
 
-readonly DEFAULT_MODEL="qwen2.5-coder-7b"
 readonly ENV_FILE="${LMSTACK_PI_ENV:-$HOME/.pi/agent/extensions/.env}"
 
 die() { printf 'lmstack-ask: %s\n' "$1" >&2; exit 1; }
 
 usage() {
-  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-1}"
 }
 
 provider=""
-model="$DEFAULT_MODEL"
+model=""
 with_tools=false
+print_model=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -P|--provider) provider="${2:-}"; shift 2 ;;
     -m|--model)    model="${2:-}";    shift 2 ;;
     -t|--tools)    with_tools=true;   shift ;;
+    --print-model) print_model=true;  shift ;;
     -h|--help)     usage 0 ;;
     --)            shift; break ;;
     -*)            die "unknown option: $1 (try --help)" ;;
@@ -47,17 +51,21 @@ done
 
 prompt="$*"
 
-# Piped input is appended rather than replacing the prompt, so the caller can
-# say what to do with the text it is piping in.
-if [[ ! -t 0 ]]; then
-  piped="$(cat)"
-  if [[ -n "$piped" ]]; then
-    prompt="${prompt:+$prompt$'\n\n'}$piped"
+# --print-model resolves and exits, so it reads no stdin and needs no prompt.
+# Draining stdin there would hang a caller that invoked it from a pipeline.
+if ! $print_model; then
+  # Piped input is appended rather than replacing the prompt, so the caller can
+  # say what to do with the text it is piping in.
+  if [[ ! -t 0 ]]; then
+    piped="$(cat)"
+    if [[ -n "$piped" ]]; then
+      prompt="${prompt:+$prompt$'\n\n'}$piped"
+    fi
   fi
-fi
 
-[[ -n "$prompt" ]] || die "nothing to ask. Pass a prompt, pipe input, or both."
-command -v pi >/dev/null 2>&1 || die "pi is not on PATH. See pi-config/README.md."
+  [[ -n "$prompt" ]] || die "nothing to ask. Pass a prompt, pipe input, or both."
+  command -v pi >/dev/null 2>&1 || die "pi is not on PATH. See pi-config/README.md."
+fi
 
 # Read a setting the same way the pi extensions do, so there is one source of
 # truth for where a host lives.
@@ -65,7 +73,7 @@ setting() {
   local name="$1" fallback="$2" line
   if [[ -n "${!name:-}" ]]; then printf '%s' "${!name}"; return; fi
   if [[ -r "$ENV_FILE" ]]; then
-    line="$(grep -m1 "^[[:space:]]*$name[[:space:]]*=" "$ENV_FILE" 2>/dev/null)" || true
+    line="$(grep -m1 "^[[:space:]]*${name}[[:space:]]*=" "$ENV_FILE" 2>/dev/null)" || true
     if [[ -n "$line" ]]; then
       printf '%s' "${line#*=}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^["'\'']//; s/["'\'']$//'
       return
@@ -82,16 +90,26 @@ if [[ -z "$provider" ]]; then
   provider="${LMSTACK_PROVIDER:-}"
 fi
 
+# lmstack-h2 -> LMSTACK_H2, vllm-inx -> VLLM_INX. The prefix its URL and key
+# settings share. Anything not alphanumeric becomes an underscore, or the result
+# is not a valid shell identifier and the indirect expansion below errors out.
+env_prefix() {
+  printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | tr -c '[:alnum:]' '_'
+}
+
+default_base() {
+  case "$1" in
+    lmstack-h1) printf 'http://h1-nvidia:4000/v1' ;;
+    lmstack-h2) printf 'http://127.0.0.1:4000/v1' ;;
+    *)          printf '' ;;
+  esac
+}
+
 if [[ -z "$provider" ]] && command -v curl >/dev/null 2>&1; then
-  for candidate in lmstack-h2:LMSTACK_H2_URL:http://127.0.0.1:4000/v1 \
-                   lmstack-h1:LMSTACK_H1_URL:http://h1-nvidia:4000/v1; do
-    name="${candidate%%:*}"
-    rest="${candidate#*:}"
-    var="${rest%%:*}"
-    default="${rest#*:}"
-    base="$(setting "$var" "$default")"
+  for candidate in lmstack-h2 lmstack-h1; do
+    base="$(setting "$(env_prefix "$candidate")_URL" "$(default_base "$candidate")")"
     if curl -fsS --max-time 2 "${base%/v1}/health/liveliness" >/dev/null 2>&1; then
-      provider="$name"
+      provider="$candidate"
       printf 'lmstack-ask: using %s (%s)\n' "$provider" "$base" >&2
       break
     fi
@@ -100,6 +118,25 @@ fi
 
 if [[ -z "$provider" ]]; then
   die "no lmstack host answered. Start one (make up HOST=...), or name a provider with -P."
+fi
+
+# Ask the host what it serves. Guessing produces a 400 from LiteLLM that reads
+# like a broken model rather than a stale default.
+if [[ -z "$model" ]]; then
+  prefix="$(env_prefix "$provider")"
+  base="$(setting "${prefix}_URL" "$(default_base "$provider")")"
+  [[ -n "$base" ]] || die "no endpoint known for '$provider'. Name a model with -m."
+  model="$(curl -fsS --max-time 5 \
+             -H "Authorization: Bearer $(setting "${prefix}_KEY" "")" \
+             "$base/models" 2>/dev/null \
+           | python3 -c 'import json,sys; print((json.load(sys.stdin).get("data") or [{}])[0].get("id",""))' 2>/dev/null)" || true
+  [[ -n "$model" ]] || die "$provider served no model list. Name a model with -m."
+  $print_model || printf 'lmstack-ask: model %s\n' "$model" >&2
+fi
+
+if $print_model; then
+  printf '%s\n' "$model"
+  exit 0
 fi
 
 args=(--print --no-session --provider "$provider" --model "$model")

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # T0.12 — feed known secrets through the stacklog writer and assert none survive.
 #
-# This is the test that lets us claim ".stacklog contains no sensitive content".
+# This is the test that lets us claim "the change log contains no sensitive content".
 # If it ever goes red, the claim is false and the writer must be fixed, not the
 # test relaxed.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-STACKLOG="$REPO_ROOT/skills/lmstack/scripts/stacklog.sh"
+STACKLOG="$REPO_ROOT/bin/lmstack-log"
 
 TMPDIR_TEST="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_TEST"' EXIT

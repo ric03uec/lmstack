@@ -18,7 +18,7 @@ jq -s '.[0] * {provider: ((.[0].provider // {}) + .[1].provider)}' \
 Then export the key opencode substitutes into `{env:LMSTACK_H2_KEY}`:
 
 ```bash
-export LMSTACK_H2_KEY=$(grep ^LITELLM_MASTER_KEY ~/.lmstack/env/stack.env | cut -d= -f2)
+export LMSTACK_H2_KEY=$(grep ^LITELLM_MASTER_KEY ~/.lmstack/stack.env | cut -d= -f2)
 ```
 
 Keep `limit.context` in step with the model YAML. Setting it higher does not

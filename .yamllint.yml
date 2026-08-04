@@ -6,7 +6,6 @@ ignore: |
   # Rendered artifacts. Their style is the template's business, not yamllint's.
   tests/golden/
   node_modules/
-  .stacklog/
 
 rules:
   # Ansible and Jinja templates routinely exceed 80 columns for good reasons.

@@ -34,7 +34,7 @@ services:
     group_add:
       - "993"
     env_file:
-      - /home/lmstack/.lmstack/env/stack.env
+      - /home/lmstack/.lmstack/stack.env
     # A single llama-server process, no tensor-parallel workers: 2g is headroom,
     # not a requirement. The 64 MB docker default is still too small for the
     # Vulkan staging buffers on larger batches.
@@ -89,7 +89,7 @@ services:
     volumes:
       - /home/lmstack/.lmstack/litellm/config.yaml:/app/config.yaml:ro
     env_file:
-      - /home/lmstack/.lmstack/env/stack.env
+      - /home/lmstack/.lmstack/stack.env
     environment:
       DATABASE_URL: "postgresql://litellm:${LITELLM_DB_PASSWORD}@postgres:5432/litellm"
       STORE_MODEL_IN_DB: "True"

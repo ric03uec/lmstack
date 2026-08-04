@@ -58,7 +58,7 @@ LMSTACK_H2_KEY=sk-...
 Read the key from the host rather than from your notes:
 
 ```bash
-ssh h1-nvidia 'grep ^LITELLM_MASTER_KEY ~/.lmstack/env/stack.env | cut -d= -f2'
+ssh h1-nvidia 'grep ^LITELLM_MASTER_KEY ~/.lmstack/stack.env | cut -d= -f2'
 ```
 
 `LMSTACK_H2_URL` defaults to loopback, which is right when h2-amd is this

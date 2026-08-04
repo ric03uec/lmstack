@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "lmstack",
+  "version": "0.2.0",
+  "description": "Put an idle GPU to work. Analyze the hardware, install a local model stack behind one OpenAI-compatible endpoint, harvest a backlog for work the stack can attempt, and run it.",
+  "author": {
+    "name": "ric03uec",
+    "url": "https://github.com/ric03uec"
+  },
+  "homepage": "https://ric03uec.github.io/lmstack",
+  "repository": "https://github.com/ric03uec/lmstack",
+  "license": "Apache-2.0",
+  "keywords": ["llm", "gpu", "local-inference", "vllm", "llama.cpp", "ansible"]
+}

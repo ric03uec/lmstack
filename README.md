@@ -12,28 +12,34 @@ notices and offers you more.
 
 You need four things on the control host — the machine you write code on:
 
-- **pi** — `curl -fsSL https://pi.dev/install.sh | sh`
+- **Claude Code** — lmstack ships as a plugin, and that is the only supported
+  way to install it
 - **Ansible** — `uv tool install ansible-core`
 - **tmux** — your package manager (`apt install tmux`, `brew install tmux`, etc.)
 - **A GPU host** — this machine, or one you can SSH to
 
-Then, inside pi (or Claude Code, or opencode), paste this:
+Inside Claude Code:
 
-> install the lmstack skill from https://ric03uec.github.io/lmstack/install
+```
+/plugin marketplace add ric03uec/lmstack
+/plugin install lmstack@lmstack
+```
 
-That URL is written for your agent to read, not for you. It tells it what to
-fetch and where to put it. Then:
+That gives you four commands:
 
-> use the lmstack skill to give me a starting point
+| Command | What it does |
+|---|---|
+| `/lmstack:analyze [target]` | Probes the hardware — locally or over SSH — and says what fits |
+| `/lmstack:install [target]` | Brings the stack up. Every generated file lands in `~/.lmstack/`, never in a repo |
+| `/lmstack:harvest <source>` | Reads a backlog and works out which items the local stack can attempt |
+| `/lmstack:exec <key>` | Runs one of them and ends with a pull request for you to review |
 
-The skill probes the target's hardware, picks a model that fits, shows you
-every file it wants to write, hands you any sudo commands it needs, and runs
-the playbooks. **Nothing to clone first** — it does that itself, once you say
-where.
+Start with `/lmstack:analyze`. It reads the GPU, does the VRAM arithmetic, and
+tells you which models fit before anything is installed. Pass an SSH target
+instead of nothing to point it at a remote box.
 
-Point it at a remote box by giving it an SSH target instead of `localhost`.
-Working on lmstack rather than using it? Clone it and run `make skill-install`,
-which points the skill at your clone instead of fetching its own copy.
+`/lmstack:install` then shows you every file it wants to write and hands you any
+sudo commands to run yourself — it never runs them for you.
 
 ## What actually gets built
 

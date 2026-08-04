@@ -79,13 +79,13 @@ for host in "${hosts[@]}"; do
   elif ! command -v docker >/dev/null 2>&1; then
     skip "T1.1 docker not installed"
   else
-    mkdir -p "$scratch/root/env"
+    mkdir -p "$scratch/root"
     printf 'HF_TOKEN=%s\nLITELLM_MASTER_KEY=%s\nLITELLM_DB_PASSWORD=%s\n' \
-      render-fixture render-fixture render-fixture >"$scratch/root/env/stack.env"
+      render-fixture render-fixture render-fixture >"$scratch/root/stack.env"
     sed "s|$FIXTURE_ROOT|$scratch/root|g" "$compose" >"$scratch/compose.yml"
 
     if docker compose -f "$scratch/compose.yml" \
-        --env-file "$scratch/root/env/stack.env" config -q 2>"$out"; then
+        --env-file "$scratch/root/stack.env" config -q 2>"$out"; then
       ok "T1.1 compose file is valid"
     else
       bad "T1.1 compose file rejected by docker compose"

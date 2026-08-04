@@ -49,7 +49,7 @@ It registers two providers:
 of the config file:
 
 ```bash
-export LMSTACK_H2_KEY=$(grep ^LITELLM_MASTER_KEY ~/.lmstack/env/stack.env | cut -d= -f2)
+export LMSTACK_H2_KEY=$(grep ^LITELLM_MASTER_KEY ~/.lmstack/stack.env | cut -d= -f2)
 ```
 
 For a remote host, read it over SSH rather than copying it into your shell rc.
@@ -65,8 +65,12 @@ Unlike the pi extensions, nothing validates this fragment against the catalog.
 `make validate` covers `pi-config/extensions/`; this file is a copy-paste
 starting point, so when you change a host's models, change it here too.
 
-## Or use the skill from opencode
+## Setting a host up from opencode
 
-`make skill-install AGENT=opencode` installs the same interactive installer that
-Claude Code gets. Setting a host up and using it as a provider are independent —
-you can do either, or both.
+You cannot — the installer ships as a Claude Code plugin, and that is the only
+supported distribution. Run `/lmstack:install` from Claude Code once, then point
+opencode at the endpoint it produced using the fragment above.
+
+The two halves are independent. Nothing about the resulting stack is specific to
+the agent that installed it: it is an OpenAI-compatible endpoint behind a master
+key, and opencode talks to it like any other provider.

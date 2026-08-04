@@ -27,7 +27,7 @@
     base_url: "http://127.0.0.1:{{ litellm_port }}"
     key_cmd: >-
       KEY=$(awk -F= '/^LITELLM_MASTER_KEY=/ {print substr($0, index($0,"=")+1); exit}'
-      {{ install_root }}/env/stack.env)
+      {{ install_root }}/stack.env)
 
   tasks:
     - name: Load model definitions for the active set

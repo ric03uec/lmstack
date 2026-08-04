@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""Strip invisible and direction-changing codepoints from untrusted text.
+
+Issue titles and bodies are attacker-influenceable — anyone can open an issue on
+a public repository. A crafted title containing bidi overrides can make the text
+the orchestrator prints appear to say something other than what it dispatches,
+and zero-width characters can hide instructions inside an otherwise innocent
+line. Everything harvested from a forge passes through here before it is echoed
+to the user, pasted into a brief, or written to a task record.
+
+Every codepoint below is named by its integer value, never written as the
+literal character. A filter containing the invisible characters it removes is
+self-erasing: it reads as a list of blanks, reviews as a no-op diff, and cannot
+be checked by eye in the one place that matters most. `tests/sanitize_test.sh`
+asserts this file stays free of them.
+
+Byte-oriented tools are wrong for this. `tr -d` operates on bytes and each of
+these is multi-byte in UTF-8, so a byte-range delete corrupts neighbouring
+characters instead of removing these cleanly.
+
+Usage:
+    lmstack-sanitize < untrusted.txt          # filter stdin to stdout
+    gh issue list --json title,body | lmstack-sanitize --json
+    lmstack-sanitize --check < untrusted.txt  # exit 1 if anything was stripped
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import unicodedata
+
+# Bidirectional formatting. These reorder rendered text without changing the
+# code units, which is what makes a spoofed title possible.
+BIDI = [
+    0x061C,  # ARABIC LETTER MARK
+    0x200E,  # LEFT-TO-RIGHT MARK
+    0x200F,  # RIGHT-TO-LEFT MARK
+    0x202A,  # LEFT-TO-RIGHT EMBEDDING
+    0x202B,  # RIGHT-TO-LEFT EMBEDDING
+    0x202C,  # POP DIRECTIONAL FORMATTING
+    0x202D,  # LEFT-TO-RIGHT OVERRIDE
+    0x202E,  # RIGHT-TO-LEFT OVERRIDE
+    0x2066,  # LEFT-TO-RIGHT ISOLATE
+    0x2067,  # RIGHT-TO-LEFT ISOLATE
+    0x2068,  # FIRST STRONG ISOLATE
+    0x2069,  # POP DIRECTIONAL ISOLATE
+]
+
+# Renders as nothing, so it can hide a payload between visible words.
+INVISIBLE = [
+    0x00AD,  # SOFT HYPHEN
+    0x180E,  # MONGOLIAN VOWEL SEPARATOR
+    0x200B,  # ZERO WIDTH SPACE
+    0x200C,  # ZERO WIDTH NON-JOINER
+    0x200D,  # ZERO WIDTH JOINER
+    0x2060,  # WORD JOINER
+    0x2061,  # FUNCTION APPLICATION
+    0x2062,  # INVISIBLE TIMES
+    0x2063,  # INVISIBLE SEPARATOR
+    0x2064,  # INVISIBLE PLUS
+    0xFEFF,  # ZERO WIDTH NO-BREAK SPACE / BOM
+    0xFFFC,  # OBJECT REPLACEMENT CHARACTER
+]
+
+# Tag characters: deprecated for language tagging, now used to smuggle an ASCII
+# payload that no terminal renders. Variation selectors serve the same purpose.
+TAGS = list(range(0xE0000, 0xE0080))
+VARIATION = list(range(0xFE00, 0xFE10)) + list(range(0xE0100, 0xE01F0))
+
+# C0 and C1 controls. Tab, newline and carriage return are legitimate in an
+# issue body; the rest include ESC, which opens an ANSI sequence and can
+# repaint or clear the orchestrator's terminal.
+CONTROLS = [cp for cp in range(0x00, 0x20) if cp not in (0x09, 0x0A, 0x0D)] + list(
+    range(0x7F, 0xA0)
+)
+
+TRANSLATION = {cp: None for cp in BIDI + INVISIBLE + TAGS + VARIATION + CONTROLS}
+
+
+def sanitize(text: str) -> str:
+    """Remove every enumerated codepoint, then sweep anything Unicode itself
+    classifies as a format character. The category sweep is the backstop: later
+    Unicode revisions assign new Cf codepoints, and a filter that only knows
+    today's list quietly stops covering them."""
+    cleaned = text.translate(TRANSLATION)
+    return "".join(ch for ch in cleaned if unicodedata.category(ch) != "Cf")
+
+
+def sanitize_json(node):
+    if isinstance(node, str):
+        return sanitize(node)
+    if isinstance(node, list):
+        return [sanitize_json(item) for item in node]
+    if isinstance(node, dict):
+        return {sanitize(k): sanitize_json(v) for k, v in node.items()}
+    return node
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="parse stdin as JSON and sanitize every string key and value, "
+        "keeping the structure intact",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="exit 1 if anything was stripped, so a caller can refuse the input "
+        "rather than silently working with a cleaned copy",
+    )
+    args = parser.parse_args()
+
+    raw = sys.stdin.read()
+
+    if args.json:
+        try:
+            doc = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            print(f"lmstack-sanitize: stdin is not valid JSON ({exc})", file=sys.stderr)
+            return 2
+        before = json.dumps(doc, ensure_ascii=False, indent=2)
+        out = json.dumps(sanitize_json(doc), ensure_ascii=False, indent=2)
+        stripped = out != before
+        out += "\n"
+    else:
+        out = sanitize(raw)
+        stripped = out != raw
+
+    sys.stdout.write(out)
+
+    if args.check and stripped:
+        print(
+            "lmstack-sanitize: input contained invisible or bidi codepoints",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

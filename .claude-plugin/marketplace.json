@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "lmstack",
+  "description": "The lmstack plugin, published from its own repository.",
+  "owner": {
+    "name": "ric03uec",
+    "url": "https://github.com/ric03uec"
+  },
+  "plugins": [
+    {
+      "name": "lmstack",
+      "source": "./",
+      "description": "Put an idle GPU to work: analyze, install, harvest, exec.",
+      "license": "Apache-2.0"
+    }
+  ]
+}

@@ -167,10 +167,20 @@ def aliases_of(model: dict) -> list[str]:
     return [model["slug"]]
 
 
-def validate_host(host_dir: Path, rep: Report) -> dict:
+def validate_host(host_dir: Path, rep: Report, state: Path | None = None) -> dict:
     alias = host_dir.name
     vars_path = host_dir / "ansible" / "vars.yml"
     hostvars = load_yaml(vars_path)
+
+    # Mirror Ansible's precedence: `make up` passes ~/.lmstack/<alias>/vars.yml
+    # with -e, which wins over the tracked defaults. Validating the tracked file
+    # alone would pass while the config actually being deployed is broken.
+    if state:
+        override_path = state / alias / "vars.yml"
+        if override_path.is_file():
+            override = load_yaml(override_path)
+            if isinstance(override, dict):
+                hostvars = {**hostvars, **override}
 
     engine = hostvars.get("engine")
     rep.check(
@@ -294,8 +304,21 @@ def validate_pi_extensions(root: Path, hosts: list[dict], rep: Report) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=REPO_ROOT, help="repository root to validate")
+    parser.add_argument(
+        "--state",
+        type=Path,
+        default=Path.home() / ".lmstack",
+        help="per-role state directory whose <alias>/vars.yml overrides the tracked "
+        "defaults, matching what `make up` passes to Ansible with -e",
+    )
+    parser.add_argument(
+        "--no-state",
+        action="store_true",
+        help="validate the tracked defaults only, ignoring any local overrides",
+    )
     parser.add_argument("--quiet", action="store_true", help="only print on failure")
     args = parser.parse_args()
+    state = None if args.no_state else args.state
 
     rep = Report()
     host_dirs = discover_hosts(args.root)
@@ -304,7 +327,7 @@ def main() -> int:
         print(f"validate_models: no hosts found under {args.root}/hosts — nothing to validate")
         return 0
 
-    hosts = [validate_host(d, rep) for d in host_dirs]
+    hosts = [validate_host(d, rep, state) for d in host_dirs]
     validate_parity(args.root, hosts, rep)
     validate_pi_extensions(args.root, hosts, rep)
 

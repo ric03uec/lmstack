@@ -54,13 +54,13 @@ Do not put a model behind an agent loop without running T3.4 against it.
 `virtual_models` is a list of names LiteLLM will serve, all backed by the same
 loaded weights. Two uses:
 
-- **Parity.** `virtual_models` lets the same alias appear on hosts with
-  different engines, so `pi --provider …` is the only thing that changes when
-  you swap them. `tests/parity.yml` declares which aliases must be common;
-  it enforces the list only when it is non-empty. No alias is currently
-  required in common — h2-amd serves `hermes-3-llama-3.1-8b` because
-  llama.cpp cannot extract tool calls from Qwen 2.5 Coder's markdown-fenced
-  output (see docs/tool-calling-on-h2-amd.md).
+- **Parity.** When two hosts share an alias, the provider name is the only thing
+  that changes when you swap between them. `tests/parity.yml` declares which
+  aliases must be common, and is enforced only while that list is non-empty. It
+  is currently empty: h2-amd serves `hermes-3-llama-3.1-8b` because llama.cpp
+  cannot extract tool calls from Qwen 2.5 Coder's markdown-fenced output. Put the
+  alias back once that is resolved — see
+  `website/docs/operations/tool-calling-on-h2-amd.md`.
 - **Aliasing an upstream name.** Serving both `qwen2.5-coder-7b` and
   `Qwen2.5-Coder-7B-Instruct` means a tool that hardcodes the HuggingFace name
   works without configuration.
@@ -71,7 +71,7 @@ validator (T0.8) and T3.2 both check for this.
 ## Tiers
 
 `tier` is `8g`, `24g` or `48g`, and the model must fit inside its tier's ceiling.
-It is what `classify.py` uses to avoid putting a 24 GiB model on an 8 GiB card.
+It is what `lmstack-classify` uses to avoid putting a 24 GiB model on an 8 GiB card.
 A model whose `vram_estimate_gib` exceeds its tier ceiling fails validation.
 
 `mandatory: true` means every host must serve it. Use it only for the parity

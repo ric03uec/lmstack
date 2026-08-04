@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Append one line per completed run to ~/.lmstack/ledger.jsonl.
+
+The ledger is cross-repo and cross-run, so it sits above the per-role
+directories and never rides along in any one task's PR.
+
+It exists to answer the only question that decides whether this loop is worth
+running: **is it cheaper than doing the issue yourself?** `wall_min` and
+`interventions` together answer it. A shape averaging 40 minutes at zero
+interventions is a win; the same shape at three interventions is a human doing
+the work with extra steps.
+
+`shape` is the task archetype — doc-mirror-sync, dead-code-delete,
+guard-clause-widen, symbol-extract, cli-flag-add, test-coverage-add. After ~20
+runs the ledger says which shapes clear on the first try, and harvest's
+classification thresholds get tuned from data rather than judgment.
+
+Wall time is computed here rather than in the shell because the obvious shell
+version is wrong on macOS: BSD `date` has no `-d`, so `date -u -d "$stamp"`
+fails, bash arithmetic receives an empty string, and the run silently records
+`0m`. Two guards follow from that, and both collapse to a null rather than a
+guess — a fabricated duration is worse than an absent one, because nobody
+audits a number that looks plausible:
+
+    * a missing or unparseable `started` stamp        -> wall_min: null
+    * a clock that stepped backwards mid-run          -> wall_min: null
+      (a laptop resuming from sleep is enough to do this)
+
+Usage:
+    lmstack-ledger --key ric03uec__lmstack#42 --host h2-amd --tier T1 \\
+                   --shape doc-mirror-sync --judge-rounds 1 \\
+                   --outcome pr-opened --pr 43 --interventions 0 \\
+                   --started-file ~/.lmstack/runs/ric03uec__lmstack-42/started
+
+    lmstack-ledger --wall-only --started-file <path>   # print "~35m" for the PR
+
+Env:
+    LMSTACK_STATE_DIR   override ~/.lmstack (used by tests)
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+OUTCOMES = ("pr-opened", "pr-opened-stuck", "abandoned", "no-change", "failed")
+
+
+def state_dir() -> Path:
+    return Path(os.environ.get("LMSTACK_STATE_DIR", Path.home() / ".lmstack"))
+
+
+def read_started(path: Path | None) -> datetime | None:
+    if not path or not path.is_file():
+        return None
+    raw = path.read_text().strip()
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def wall_minutes(started: datetime | None, ended: datetime) -> int | None:
+    """None whenever the answer would be a guess."""
+    if started is None:
+        return None
+    minutes = int((ended - started).total_seconds() // 60)
+    return None if minutes < 0 else minutes
+
+
+def rounded(minutes: int | None) -> str:
+    """What the PR shows. A human reads this, so it is rounded to five minutes;
+    the ledger keeps the exact value so trends are not quantised into buckets."""
+    if minutes is None:
+        return "unknown"
+    return f"~{(minutes + 2) // 5 * 5}m"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--started-file", type=Path)
+    parser.add_argument(
+        "--wall-only",
+        action="store_true",
+        help="print the rounded wall time and exit; used when asking the judge "
+        "to open the PR",
+    )
+    parser.add_argument("--key")
+    parser.add_argument("--host")
+    parser.add_argument("--tier")
+    parser.add_argument("--shape")
+    parser.add_argument("--judge-rounds", type=int, default=0)
+    parser.add_argument("--interventions", type=int, default=0)
+    parser.add_argument("--outcome", choices=OUTCOMES)
+    parser.add_argument("--pr", help="PR number or url, when one was opened")
+    args = parser.parse_args()
+
+    ended = datetime.now(timezone.utc)
+    started = read_started(args.started_file)
+    minutes = wall_minutes(started, ended)
+
+    if args.wall_only:
+        print(rounded(minutes))
+        return 0
+
+    for required in ("key", "host", "outcome"):
+        if not getattr(args, required):
+            print(f"lmstack-ledger: --{required} is required", file=sys.stderr)
+            return 2
+
+    entry = {
+        "key": args.key,
+        "host_role": args.host,
+        "tier": args.tier,
+        "shape": args.shape,
+        "judge_rounds": args.judge_rounds,
+        "outcome": args.outcome,
+        "pr": args.pr,
+        "started": started.strftime("%Y-%m-%dT%H:%M:%SZ") if started else None,
+        "ended": ended.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "wall_min": minutes,
+        "interventions": args.interventions,
+        "ts": ended.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+    path = state_dir() / "ledger.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    print(path)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

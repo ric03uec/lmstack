@@ -32,7 +32,15 @@ fi
 
 # ---------------------------------------------------------------------------
 section "shellcheck"
-mapfile -t scripts < <(find . -name '*.sh' -not -path './website/*' -not -path './.git/*' | sort)
+# Everything in bin/ is extensionless so it reads as a command rather than a
+# file, so a *.sh glob alone would silently skip the shipped scripts. Match on
+# the shebang instead; the python3 ones fall out on their own.
+mapfile -t scripts < <({
+  find . -name '*.sh' -not -path './website/*' -not -path './.git/*'
+  for f in bin/*; do
+    [[ -f $f ]] && head -n1 "$f" | grep -qE '^#!.*[ /](bash|sh)$' && printf '%s\n' "$f"
+  done
+} | sort -u)
 if command -v shellcheck >/dev/null 2>&1; then
   if [[ ${#scripts[@]} -eq 0 ]]; then
     ok "no shell scripts to check"

@@ -60,7 +60,7 @@ assert_rejects() {
   "$mutate" "$root"
 
   local output rc
-  output="$(python3 "$VALIDATOR" --root "$root" 2>&1)" && rc=0 || rc=$?
+  output="$(python3 "$VALIDATOR" --no-state --root "$root" 2>&1)" && rc=0 || rc=$?
 
   if [[ "$rc" -eq 0 ]]; then
     bad "$name — validator accepted it"
@@ -76,11 +76,11 @@ printf '\n== validate_models negative cases ==\n'
 
 # Baseline: the clean scaffold must pass, or every case below is meaningless.
 scaffold "$TMPROOT/clean"
-if python3 "$VALIDATOR" --root "$TMPROOT/clean" >/dev/null 2>&1; then
+if python3 "$VALIDATOR" --no-state --root "$TMPROOT/clean" >/dev/null 2>&1; then
   ok "clean fixture passes"
 else
   bad "clean fixture does not pass — all negative cases are unreliable"
-  python3 "$VALIDATOR" --root "$TMPROOT/clean" 2>&1 | sed 's/^/        /'
+  python3 "$VALIDATOR" --no-state --root "$TMPROOT/clean" 2>&1 | sed 's/^/        /'
 fi
 
 m_slug_mismatch() {

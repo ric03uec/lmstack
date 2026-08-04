@@ -5,11 +5,12 @@ title: Quickstart
 
 # Quickstart
 
-This is the explicit path: every step the skill would take, done by hand. It is
-worth reading even if you use the skill, because it is what the skill runs.
+This is the explicit path: every step `/lmstack:install` would take, done by
+hand. It is worth reading even if you use the plugin, because it is what the
+plugin runs.
 
-If you would rather not, [install the skill](install) and ask it for a starting
-point.
+If you would rather not, [install the plugin](install) and run
+`/lmstack:analyze` instead.
 
 ## Before you start
 
@@ -60,7 +61,7 @@ ansible-playbook -i inventory/hosts.ini hosts/h2-amd/ansible/00-bootstrap.yml -K
 
 ### Secrets
 
-The first `make up` drops `~/.lmstack/env/stack.env` from the example and stops.
+The first `make up` drops `~/.lmstack/stack.env` from the example and stops.
 Fill it in on the host, then run `make up` again. It is never overwritten
 afterwards.
 

@@ -30,25 +30,25 @@ None of these need a host, a GPU, or a network.
 | `make render-test` | Every host's templates render, and the rendered compose file still binds engines to `127.0.0.1`. |
 | `make template-test` | `hosts/*-template` still instantiates into a host the validator accepts, and has not drifted from the host it was cut from. |
 | `make classify-test` | Every hardware probe fixture produces the expected verdict. |
-| `make skill-install-test` | The skill install binds an absolute repo path. |
+| `make plugin-test` | The plugin and marketplace manifests are valid, every skill declares a name, and no skill still carries a build-time path placeholder. |
+| `make harvest-test` | The sanitizer strips invisible and bidi codepoints, and the task store stops harvest and exec overwriting each other's fields. |
+| `make exec-test` | The forge drives real tmux windows, and the ledger reports an unknown duration rather than inventing one. |
 | `make pi-config-test` | The pi sync copies extensions, merges rather than overwrites, and round-trips. |
 | `make lint` | yamllint, shellcheck, ansible-lint at the production profile, playbook syntax, and a scan for secrets committed by accident. |
 
 Run `make test` before you push. It takes seconds and catches the class of
 mistake that otherwise surfaces forty minutes into a bring-up.
 
-## Skill
+## Plugin
 
 | Target | Notes |
 |---|---|
-| `make skill-install` | Installs into every agent directory found. `AGENT=claude\|opencode\|pi` restricts it to one. |
-| `make skill-list` | Shows where the install *would* write, without writing. Run this first if you are unsure what directories exist. |
+| `make plugin-dev` | Starts Claude Code with this working tree loaded as the plugin, so an edit to a skill takes effect on the next session with nothing to install. |
 
-The install writes this clone's absolute path into the skill. Moving or renaming
-the directory means re-running it.
-
-These targets are for working *on* lmstack. Installing the skill to use it needs
-no clone at all — see [Install the skill](../install).
+This is for working *on* lmstack. To use it, install the published plugin
+instead — see [Install](../install). There is no build step and nothing to
+template: skills resolve their own location at runtime through
+`${CLAUDE_PLUGIN_ROOT}`.
 
 ## Control host
 

@@ -234,9 +234,9 @@ pi-config/extensions/.env
 # The user's real inventory. hosts.ini.example is the tracked template.
 inventory/hosts.ini
 
-# Host change log: local-only analysis data. Only .gitkeep is tracked.
-.stacklog/*
-!.stacklog/.gitkeep
+# Host change log. It lives at ~/.lmstack/<role>/stacklog/ now, outside the
+# repository entirely; this rule catches a stray directory from an older clone.
+.stacklog/
 
 # Rendered artifacts produced by test runs
 tests/.render/
@@ -247,3 +247,6 @@ node_modules/
 website/node_modules/
 website/build/
 website/.docusaurus/
+
+# Claude Code local runtime state (scheduled task locks, session scratch).
+.claude/

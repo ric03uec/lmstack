@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""Read and write the per-host task queue under ~/.lmstack/<role>/tasks/.
+
+`/lmstack:harvest` writes a record per backlog item it assessed; `/lmstack:exec`
+reads one, runs it, and moves its status. Keeping the queue in files rather than
+in the forge means a verdict survives a re-run, and — deliberately — that
+lmstack never writes a label or a comment back to someone's repository. The
+assessment is the user's private working note about their own hardware, not a
+public claim about their backlog.
+
+Ownership is split, and the split is enforced here rather than by convention:
+
+    harvest owns  tier, complexity, shape, staleness, verdict_reason
+    exec owns     status
+
+So `put` will not set a status and `set` will not touch a verdict. A harvest
+re-run therefore cannot reset a task that a forge is part-way through.
+
+`staleness` is stored for context but is **not** a cache. HEAD moves between
+passes, so harvest re-runs the staleness check every time and overwrites it. Only
+the classification is cached.
+
+Layout, with the repository slug as a directory so one host can serve several
+repositories without collision:
+
+    ~/.lmstack/<role>/tasks/<owner>__<repo>/<number>.json
+
+Usage:
+    lmstack-task put  --host h2-amd --key ric03uec__lmstack#42 \\
+                      --url … --title … --tier T1 --complexity s \\
+                      --shape doc-mirror-sync --staleness DISPATCH \\
+                      --reason "single file named in the brief" \\
+                      --repo-path /home/user/workspace/lmstack
+    lmstack-task get  --host h2-amd --key ric03uec__lmstack#42
+    lmstack-task list --host h2-amd [--tier T1] [--status queued] [--json]
+    lmstack-task set  --host h2-amd --key ric03uec__lmstack#42 --status running
+
+Env:
+    LMSTACK_STATE_DIR   override ~/.lmstack (used by tests)
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+TIERS = ("T1", "T2", "park", "TRAP")
+STALENESS = ("DISPATCH", "RESCOPE", "CLOSE-REC", "TRAP")
+STATUSES = ("queued", "running", "in-review", "merged", "failed", "cleaned")
+COMPLEXITY = ("xs", "s", "m", "l", "xl")
+
+# Every captured group below becomes a path segment, so the character classes
+# are the traversal guard as well as the format check.
+KEY_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)__([A-Za-z0-9][A-Za-z0-9._-]*)#(\d+)$")
+ROLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+
+
+class TaskError(Exception):
+    pass
+
+
+def state_dir() -> Path:
+    return Path(os.environ.get("LMSTACK_STATE_DIR", Path.home() / ".lmstack"))
+
+
+def parse_key(key: str) -> tuple[str, str, str]:
+    match = KEY_RE.match(key)
+    if not match:
+        raise TaskError(
+            f"malformed --key '{key}'; expected <owner>__<repo>#<number>, "
+            "e.g. ric03uec__lmstack#42"
+        )
+    return match.group(1), match.group(2), match.group(3)
+
+
+def record_path(role: str, key: str) -> Path:
+    if not ROLE_RE.match(role):
+        raise TaskError(f"--host must match [A-Za-z0-9][A-Za-z0-9_-]* (got '{role}')")
+    owner, repo, number = parse_key(key)
+    return state_dir() / role / "tasks" / f"{owner}__{repo}" / f"{number}.json"
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def load(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text())
+
+
+def save(path: Path, record: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n")
+
+
+def cmd_put(args: argparse.Namespace) -> int:
+    path = record_path(args.host, args.key)
+    existing = load(path)
+
+    record = {
+        **existing,
+        "key": args.key,
+        "host_role": args.host,
+        "tier": args.tier,
+        "staleness": args.staleness,
+        "verdict_reason": args.reason,
+        "harvested_at": now(),
+    }
+    for name in ("url", "title", "repo_path", "complexity", "shape"):
+        value = getattr(args, name, None)
+        if value is not None:
+            record[name] = value
+
+    # exec owns status. A harvest re-run over a task a forge already picked up
+    # must not send it back to the queue.
+    record.setdefault("status", "queued")
+    if existing:
+        record["first_harvested_at"] = existing.get(
+            "first_harvested_at", existing.get("harvested_at", record["harvested_at"])
+        )
+
+    save(path, record)
+    print(path)
+    return 0
+
+
+def cmd_get(args: argparse.Namespace) -> int:
+    path = record_path(args.host, args.key)
+    if not path.is_file():
+        print(f"lmstack-task: no record for '{args.key}' at {path}", file=sys.stderr)
+        return 1
+    print(json.dumps(load(path), indent=2, ensure_ascii=False))
+    return 0
+
+
+def cmd_set(args: argparse.Namespace) -> int:
+    path = record_path(args.host, args.key)
+    if not path.is_file():
+        print(
+            f"lmstack-task: refusing to create '{args.key}' from a status change; "
+            "harvest it first",
+            file=sys.stderr,
+        )
+        return 1
+    record = load(path)
+    record["status"] = args.status
+    record["status_changed_at"] = now()
+    if args.pr:
+        record["pr"] = args.pr
+    save(path, record)
+    print(path)
+    return 0
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    if not ROLE_RE.match(args.host):
+        raise TaskError(f"--host must match [A-Za-z0-9][A-Za-z0-9_-]* (got '{args.host}')")
+    root = state_dir() / args.host / "tasks"
+    records = []
+    if root.is_dir():
+        for path in sorted(root.glob("*/*.json")):
+            try:
+                records.append(load(path))
+            except json.JSONDecodeError:
+                print(f"lmstack-task: skipping unreadable {path}", file=sys.stderr)
+
+    if args.tier:
+        records = [r for r in records if r.get("tier") == args.tier]
+    if args.status:
+        records = [r for r in records if r.get("status") == args.status]
+    if args.repo:
+        records = [r for r in records if r.get("key", "").startswith(args.repo + "#")]
+
+    if args.json:
+        print(json.dumps(records, indent=2, ensure_ascii=False))
+        return 0
+
+    if not records:
+        print("no tasks match")
+        return 0
+
+    # Sorted so the dispatchable work is at the top of the printed queue.
+    order = {t: i for i, t in enumerate(TIERS)}
+    records.sort(key=lambda r: (order.get(r.get("tier"), 99), r.get("key", "")))
+    width = max(len(r.get("key", "")) for r in records)
+    for r in records:
+        print(
+            f"{r.get('key', ''):<{width}}  {r.get('tier', '?'):<5} "
+            f"{r.get('status', '?'):<10} {r.get('title', '')[:60]}"
+        )
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    put = sub.add_parser("put", help="write or update a harvested task record")
+    put.add_argument("--host", required=True)
+    put.add_argument("--key", required=True)
+    put.add_argument("--tier", required=True, choices=TIERS)
+    put.add_argument("--staleness", required=True, choices=STALENESS)
+    put.add_argument("--reason", required=True, help="why this tier, in one line")
+    put.add_argument("--url")
+    put.add_argument("--title")
+    put.add_argument("--repo-path", dest="repo_path")
+    put.add_argument("--complexity", choices=COMPLEXITY)
+    put.add_argument("--shape")
+    put.set_defaults(func=cmd_put)
+
+    get = sub.add_parser("get", help="print one record")
+    get.add_argument("--host", required=True)
+    get.add_argument("--key", required=True)
+    get.set_defaults(func=cmd_get)
+
+    st = sub.add_parser("set", help="move a task's status (exec owns this)")
+    st.add_argument("--host", required=True)
+    st.add_argument("--key", required=True)
+    st.add_argument("--status", required=True, choices=STATUSES)
+    st.add_argument("--pr", help="PR url, recorded when status becomes in-review")
+    st.set_defaults(func=cmd_set)
+
+    ls = sub.add_parser("list", help="list the queue")
+    ls.add_argument("--host", required=True)
+    ls.add_argument("--tier", choices=TIERS)
+    ls.add_argument("--status", choices=STATUSES)
+    ls.add_argument("--repo", help="filter to one <owner>__<repo>")
+    ls.add_argument("--json", action="store_true")
+    ls.set_defaults(func=cmd_list)
+
+    args = parser.parse_args()
+    try:
+        return args.func(args)
+    except TaskError as exc:
+        print(f"lmstack-task: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

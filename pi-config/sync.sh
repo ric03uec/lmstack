@@ -186,7 +186,6 @@ install_config() {
 Next:
   1. fill $TARGET/extensions/.env with your host URL and LiteLLM key
   2. pi --list-models        # lmstack-h1 / lmstack-h2 should appear
-  3. cp $SCRIPT_DIR/bin/lmstack-ask ~/bin/   # or add pi-config/bin to PATH
 EOF
 }
 

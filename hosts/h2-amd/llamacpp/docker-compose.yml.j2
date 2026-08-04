@@ -35,7 +35,7 @@ services:
     group_add:
       - "{{ llamacpp_render_gid }}"
     env_file:
-      - {{ install_root }}/env/stack.env
+      - {{ install_root }}/stack.env
 {% if m.environment is defined and m.environment %}
     environment:
 {% for k, v in m.environment.items() %}
@@ -96,7 +96,7 @@ services:
     volumes:
       - {{ install_root }}/litellm/config.yaml:/app/config.yaml:ro
     env_file:
-      - {{ install_root }}/env/stack.env
+      - {{ install_root }}/stack.env
     environment:
       DATABASE_URL: "postgresql://litellm:${LITELLM_DB_PASSWORD}@postgres:5432/litellm"
       STORE_MODEL_IN_DB: "True"

@@ -23,7 +23,7 @@ services:
       - /home/lmstack/.lmstack/hf-cache:/root/.cache/huggingface
       - /home/lmstack/.lmstack/chat-templates:/chat-templates:ro
     env_file:
-      - /home/lmstack/.lmstack/env/stack.env
+      - /home/lmstack/.lmstack/stack.env
     # vLLM's tensor-parallel workers exchange tensors over /dev/shm. The 64 MB
     # docker default deadlocks them on anything but a single small model.
     shm_size: "16g"
@@ -85,7 +85,7 @@ services:
     volumes:
       - /home/lmstack/.lmstack/litellm/config.yaml:/app/config.yaml:ro
     env_file:
-      - /home/lmstack/.lmstack/env/stack.env
+      - /home/lmstack/.lmstack/stack.env
     environment:
       DATABASE_URL: "postgresql://litellm:${LITELLM_DB_PASSWORD}@postgres:5432/litellm"
       STORE_MODEL_IN_DB: "True"

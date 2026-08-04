@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Append one redacted JSONL event to .stacklog/YYYY-MM.jsonl.
+# Append one redacted JSONL event to ~/.lmstack/<host>/stacklog/YYYY-MM.jsonl.
 #
 # Every action the lmstack skill takes against a host goes through here, so the
 # log is a durable record of what changed on which host over time. The files are
@@ -10,7 +10,7 @@
 # covers anything a caller passes through --detail without thinking.
 #
 # Usage:
-#   stacklog.sh --host h1-nvidia --event apply --action bootstrap.docker_install \
+#   lmstack-log --host h1-nvidia --event apply --action bootstrap.docker_install \
 #               --status ok [--duration-ms 41230] [--run-id 01J9X] \
 #               [--actor skill] [--detail '{"packages":["docker-ce"]}'] \
 #               [--hw '{"gpu":"RTX 4070","vram_gib":12}'] \
@@ -78,6 +78,12 @@ if [[ "$host" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$host" == *.* ]]; then
   die "--host must be an inventory alias (e.g. h1-nvidia), not an address"
 fi
 
+# The alias is also a path segment in the output directory below, so restrict it
+# to characters that cannot traverse out of it.
+if [[ ! "$host" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
+  die "--host must match [A-Za-z0-9][A-Za-z0-9_-]* (got '$host')"
+fi
+
 # `jq empty` validates without emitting; `jq -e .` would treat a legitimate
 # `null` payload (the default for --hw) as a failure.
 jq empty <<<"$detail" 2>/dev/null || die "--detail is not valid JSON"
@@ -95,11 +101,9 @@ if [[ -n "$error_kind" || -n "$error_msg" ]]; then
   error_json="$(jq -cn --arg k "$error_kind" --arg m "$error_msg" '{kind: $k, msg: $m}')"
 fi
 
-# The installed copy of this skill does not sit inside the repo, so walking up
-# from BASH_SOURCE would land in the agent's config directory. LMSTACK_REPO is
-# what the skill exports; the walk-up is the running-from-a-clone case.
-repo_root="${LMSTACK_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
-outdir="${LMSTACK_STACKLOG_DIR:-$repo_root/.stacklog}"
+# Per role, outside the repository. Using lmstack must never dirty a working
+# tree, and the host alias is already validated above as a safe path segment.
+outdir="${LMSTACK_STACKLOG_DIR:-$HOME/.lmstack/$host/stacklog}"
 mkdir -p "$outdir"
 outfile="$outdir/$(date -u +%Y-%m).jsonl"
 

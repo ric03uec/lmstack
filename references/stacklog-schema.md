@@ -12,7 +12,7 @@ Always through the writer. Never by appending to the file yourself — the
 redaction pass is in the writer.
 
 ```bash
-skills/lmstack/scripts/stacklog.sh \
+lmstack-log \
   --host h2-amd \
   --event apply \
   --action stack.up \
@@ -84,7 +84,7 @@ A log containing only successes cannot answer the question the file exists for.
 When something fails, log it and then stop:
 
 ```bash
-skills/lmstack/scripts/stacklog.sh --host h1-nvidia --event error \
+lmstack-log --host h1-nvidia --event error \
   --action stack.up --status failed \
   --error-kind engine_timeout \
   --error-msg "vllm-qwen2.5-coder-7b did not answer /v1/models within 40m"

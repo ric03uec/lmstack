@@ -1,0 +1,246 @@
+#!/usr/bin/env bash
+# Manage a Forge: one tmux session per task, two live interactive windows.
+#
+# `lm-exec` runs pi against the local stack and writes the code. `lm-judge` runs
+# Claude Code and reviews it. Both are ordinary interactive sessions the user can
+# attach to and type into at any time — that is the point, not an accident. The
+# orchestrator drives them the same way a person would, by typing into windows
+# and reading what comes back.
+#
+# This exists so the tmux mechanics live in one tested place. Every one of them
+# is easy to get wrong in a way that fails quietly:
+#
+#   * Multi-line text must go in via load-buffer/paste-buffer. `send-keys` turns
+#     every embedded newline into a Return, so a brief is submitted line by line
+#     and the model starts work on a fragment before it has read the scope fence.
+#   * The Return that submits must be a separate send-keys after a settle, or a
+#     TUI still drawing its first frame swallows it and sits on typed-but-never-
+#     submitted text looking, from the outside, exactly like a busy agent.
+#   * capture-pane pads to the pane height, so a tail can be all padding.
+#   * Idle is inferred, because an interactive window has no exit code. Two
+#     byte-identical non-empty captures separated by a real interval is the
+#     signal; empty is "has not drawn yet", not "done".
+#
+# Usage:
+#   lmstack-forge create  --key <key> --worktree <dir> \
+#                         --exec-cmd '<cmd>' --judge-cmd '<cmd>' --run-dir <dir>
+#   lmstack-forge paste   --key <key> --window lm-exec --file <path>
+#   lmstack-forge type    --key <key> --window lm-judge --line '<one line>'
+#   lmstack-forge capture --key <key> --window lm-exec [--lines 40]
+#   lmstack-forge idle    --key <key> --window lm-exec [--interval 90]
+#   lmstack-forge status  [--key <key>]
+#   lmstack-forge kill    --key <key>
+#
+# `idle` exits 0 when the window is idle, 1 when it is still working.
+#
+# Env:
+#   LMSTACK_STATE_DIR   override ~/.lmstack (used by tests)
+
+set -uo pipefail
+
+die() { printf 'lmstack-forge: %s\n' "$1" >&2; exit 2; }
+
+command -v tmux >/dev/null 2>&1 || die "tmux is required but not installed"
+
+STATE_DIR="${LMSTACK_STATE_DIR:-$HOME/.lmstack}"
+
+cmd="${1:-}"
+[[ -n "$cmd" ]] || die "a subcommand is required (create|paste|type|capture|idle|status|kill)"
+shift
+
+key=""; worktree=""; exec_cmd=""; judge_cmd=""; run_dir=""
+window=""; file=""; line=""; lines=40; interval=90
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --key)       key="$2";       shift 2 ;;
+    --worktree)  worktree="$2";  shift 2 ;;
+    --exec-cmd)  exec_cmd="$2";  shift 2 ;;
+    --judge-cmd) judge_cmd="$2"; shift 2 ;;
+    --run-dir)   run_dir="$2";   shift 2 ;;
+    --window)    window="$2";    shift 2 ;;
+    --file)      file="$2";      shift 2 ;;
+    --line)      line="$2";      shift 2 ;;
+    --lines)     lines="$2";     shift 2 ;;
+    --interval)  interval="$2";  shift 2 ;;
+    -h|--help)   sed -n '2,35p' "$0"; exit 0 ;;
+    *)           die "unknown argument: $1" ;;
+  esac
+done
+
+# The key becomes a tmux session name. tmux treats '.' and ':' as address
+# separators, so a key containing either would make every -t lookup ambiguous.
+session_for() {
+  local k="$1"
+  [[ "$k" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*__[A-Za-z0-9][A-Za-z0-9._-]*#[0-9]+$ ]] \
+    || die "malformed --key '$k'; expected <owner>__<repo>#<number>"
+  printf 'lmstack-%s' "${k//[#.]/-}"
+}
+
+need_key() { [[ -n "$key" ]] || die "--key is required"; }
+
+need_window() {
+  case "$window" in
+    lm-exec|lm-judge) ;;
+    "") die "--window is required (lm-exec|lm-judge)" ;;
+    *)  die "--window must be lm-exec or lm-judge (got '$window')" ;;
+  esac
+}
+
+alive() { tmux has-session -t "=$1" 2>/dev/null; }
+
+# Submit text that is already sitting in the agent's input box. The Enter has to
+# be its own send-keys, after a settle: a TUI that is still laying out its first
+# frame buffers the keystrokes it was sent and drops the Return, leaving the
+# brief typed but never submitted. That failure is silent — the window looks
+# alive, the agent looks busy, and it sits at an unsubmitted prompt forever.
+submit() {
+  sleep 1
+  tmux send-keys -t "$1" Enter
+}
+
+# capture-pane pads its output to the full pane height. pi keeps a status bar on
+# the bottom row so its panes look full, but Claude Code draws from the top and
+# leaves the rest blank — a 74-row pane with 21 rows of content returns 53 empty
+# lines, and `tail -n 40` sees only those. That made `capture` print nothing and,
+# far worse, made `idle` compare "" with "" and call a judge that had not started
+# yet finished. Drop the trailing blanks before taking the tail.
+pane_tail() {
+  tmux capture-pane -p -t "$1" \
+    | awk '{ buf = buf $0 "\n"; if (NF) { printf "%s", buf; buf = "" } }' \
+    | tail -n "$2"
+}
+
+# Refuse to send text to a window sitting at a shell prompt. If the agent exited
+# — a bad flag, a missing provider — tmux happily delivers the brief to whatever
+# replaced it, and a shell runs it line by line. The brief quotes issue text, so
+# that turns a filed issue into command execution. Fail loudly instead.
+refuse_shell() {
+  local target="$1" proc
+  proc="$(tmux display-message -p -t "$target" '#{pane_current_command}' 2>/dev/null)"
+  case "$proc" in
+    sh|bash|zsh|fish|dash|ksh|tcsh|csh)
+      die "window '$window' is at a $proc prompt — the agent is not running there.
+Nothing was sent. Check the command the forge was created with, then recreate it." ;;
+  esac
+}
+
+case "$cmd" in
+
+create)
+  need_key
+  [[ -n "$worktree"  ]] || die "--worktree is required"
+  [[ -d "$worktree"  ]] || die "--worktree '$worktree' does not exist"
+  [[ -n "$exec_cmd"  ]] || die "--exec-cmd is required"
+  [[ -n "$judge_cmd" ]] || die "--judge-cmd is required"
+  s="$(session_for "$key")" || exit 2
+
+  if alive "$s"; then
+    die "session '$s' already exists — a forge for this task is already running"
+  fi
+
+  run_dir="${run_dir:-$STATE_DIR/runs/${key//[#.]/-}}"
+  mkdir -p "$run_dir"
+
+  # The start stamp is a file, not `tmux display-message -p session_created`. A
+  # session recreated mid-run resets its own creation clock, which would silently
+  # undercount the run in the ledger.
+  date -u +%Y-%m-%dT%H:%M:%SZ > "$run_dir/started"
+
+  tmux new-session -d -s "$s" -n lm-exec -c "$worktree" \
+    || die "could not create session '$s'"
+  tmux new-window -t "$s" -n lm-judge -c "$worktree" \
+    || die "could not create the lm-judge window"
+
+  # -o keeps appending across the whole run rather than restarting the file each
+  # time the pipe is re-established, so the transcript survives a reattach.
+  tmux pipe-pane -o -t "$s:lm-exec"  "cat >> '$run_dir/exec.log'"
+  tmux pipe-pane -o -t "$s:lm-judge" "cat >> '$run_dir/judge.log'"
+
+  tmux send-keys -t "$s:lm-exec"  "$exec_cmd"  Enter
+  tmux send-keys -t "$s:lm-judge" "$judge_cmd" Enter
+
+  printf '%s\n' "$s"
+  printf 'attach with: tmux attach -t %s\n' "$s" >&2
+  ;;
+
+paste)
+  need_key; need_window
+  [[ -n "$file" ]] || die "--file is required"
+  [[ -f "$file" ]] || die "--file '$file' does not exist"
+  s="$(session_for "$key")" || exit 2
+  alive "$s" || die "no live session '$s'"
+  refuse_shell "$s:$window"
+
+  # One message, not one per line. This is the whole reason the subcommand
+  # exists — see the header.
+  tmux load-buffer -b lmstack "$file" || die "load-buffer failed"
+  tmux paste-buffer -b lmstack -t "$s:$window" || die "paste-buffer failed"
+  submit "$s:$window"
+  ;;
+
+type)
+  need_key; need_window
+  [[ -n "$line" ]] || die "--line is required"
+  [[ "$line" != *$'\n'* ]] || die "--line is single-line only; use 'paste' for a file"
+  s="$(session_for "$key")" || exit 2
+  alive "$s" || die "no live session '$s'"
+  refuse_shell "$s:$window"
+  tmux send-keys -t "$s:$window" "$line"
+  submit "$s:$window"
+  ;;
+
+capture)
+  need_key; need_window
+  s="$(session_for "$key")" || exit 2
+  alive "$s" || die "no live session '$s'"
+  pane_tail "$s:$window" "$lines"
+  ;;
+
+idle)
+  need_key; need_window
+  s="$(session_for "$key")" || exit 2
+  alive "$s" || die "no live session '$s'"
+
+  first="$(pane_tail "$s:$window" "$lines")"
+  sleep "$interval"
+  second="$(pane_tail "$s:$window" "$lines")"
+
+  # An empty pane is not an idle pane, it is one that has not drawn yet. Calling
+  # it idle would let the orchestrator move a task straight to review having read
+  # nothing at all.
+  if [[ -z "${second//[[:space:]]/}" ]]; then
+    exit 1
+  fi
+
+  # Byte-identical across a real interval. A spinner, a streaming token, or a
+  # progress line all differ between captures, which is exactly the signal.
+  if [[ "$first" == "$second" ]]; then
+    printf '%s' "$second"
+    exit 0
+  fi
+  printf '%s' "$second"
+  exit 1
+  ;;
+
+status)
+  if [[ -n "$key" ]]; then
+    s="$(session_for "$key")" || exit 2
+    if alive "$s"; then printf 'live %s\n' "$s"; exit 0; fi
+    printf 'dead %s\n' "$s"; exit 1
+  fi
+  # No key: list every forge. Used by the sweep to spot stale `running` claims.
+  tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^lmstack-' || true
+  ;;
+
+kill)
+  need_key
+  s="$(session_for "$key")" || exit 2
+  alive "$s" || { printf 'no live session %s\n' "$s"; exit 0; }
+  tmux kill-session -t "=$s" && printf 'killed %s\n' "$s"
+  ;;
+
+*)
+  die "unknown subcommand '$cmd' (create|paste|type|capture|idle|status|kill)"
+  ;;
+esac

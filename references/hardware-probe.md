@@ -1,6 +1,6 @@
 # Reading probe output
 
-`scripts/probe-host.sh` emits one JSON object. Every field is best-effort: a
+`lmstack-probe` emits one JSON object. Every field is best-effort: a
 missing tool yields `null`, never an error, because the script is designed to
 run against a host that has not been bootstrapped yet.
 
@@ -25,12 +25,12 @@ run against a host that has not been bootstrapped yet.
 **`vram_gib: 2` on a laptop is not a 2 GiB GPU.** AMD APUs carve out a token
 dedicated pool — 512 MiB or 2 GiB, set in the BIOS — and allocate everything else
 through GTT from system RAM. A machine reporting `vram_gib: 2, gtt_gib: 29` can
-comfortably serve a 7B model. `classify.py` takes the larger of the two for this
+comfortably serve a 7B model. `lmstack-classify` takes the larger of the two for this
 reason. Reading the VRAM figure alone declares most AMD laptops unsupported.
 
 **`gtt_gib` on a discrete card is not additional capacity.** A dGPU also reports
 a GTT budget, but spilling into it means transferring weights over PCIe per
-token. `classify.py` takes the max, which on a dGPU is the real VRAM. Do not add
+token. `lmstack-classify` takes the max, which on a dGPU is the real VRAM. Do not add
 the two together.
 
 **`docker.runtimes` without `nvidia` is not a failure.** Bootstrap registers the
@@ -41,7 +41,7 @@ NVIDIA runtime. It matters only if the user says bootstrap already ran.
 The script is self-contained on purpose:
 
 ```bash
-ssh user@box 'bash -s' < skills/lmstack/scripts/probe-host.sh
+ssh user@box 'bash -s' < "$(command -v lmstack-probe)"
 ```
 
 Nothing is copied to the target and nothing is left behind. It needs bash and

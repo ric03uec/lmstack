@@ -97,7 +97,6 @@
         state: directory
         mode: "{{ item.mode }}"
       loop:
-        - {path: env, mode: "0700"}
         - {path: models-gguf, mode: "0755"}
         - {path: litellm, mode: "0755"}
         - {path: models, mode: "0755"}
@@ -137,7 +136,7 @@
     - name: Drop stack.env from the example when absent
       ansible.builtin.copy:
         src: "{{ engine_root }}/env/stack.env.example"
-        dest: "{{ install_root }}/env/stack.env"
+        dest: "{{ install_root }}/stack.env"
         mode: "0600"
         force: false
       register: env_drop
@@ -145,7 +144,7 @@
     - name: Explain what to do with a freshly created stack.env
       ansible.builtin.debug:
         msg: >-
-          Created {{ install_root }}/env/stack.env from the example. Fill in
+          Created {{ install_root }}/stack.env from the example. Fill in
           LITELLM_MASTER_KEY and LITELLM_DB_PASSWORD, then re-run. HF_TOKEN is
           optional here — the default GGUFs are ungated. The file is chmod 600
           and is never overwritten by this playbook.
@@ -153,7 +152,7 @@
 
     - name: Read stack.env for the secret presence check
       ansible.builtin.slurp:
-        src: "{{ install_root }}/env/stack.env"
+        src: "{{ install_root }}/stack.env"
       register: env_slurped
 
     # Checked by shape, never by value, and never printed. Catches the blank
@@ -163,7 +162,7 @@
       ansible.builtin.assert:
         that:
           - (env_slurped.content | b64decode) is regex('(?m)^' ~ item.key ~ '=\S+')
-        fail_msg: "{{ install_root }}/env/stack.env has a blank {{ item.key }}. {{ item.hint }}"
+        fail_msg: "{{ install_root }}/stack.env has a blank {{ item.key }}. {{ item.hint }}"
       loop:
         - key: LITELLM_MASTER_KEY
           hint: >-
@@ -246,7 +245,7 @@
         files:
           - docker-compose.yml
         env_files:
-          - "{{ install_root }}/env/stack.env"
+          - "{{ install_root }}/stack.env"
         state: present
         pull: missing
         wait: false

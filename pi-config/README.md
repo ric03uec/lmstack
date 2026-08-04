@@ -24,7 +24,6 @@ repo owns.
 | `settings.json` | The three package entries, merged into yours |
 | `npm/package.json` | One npm extension, merged into yours |
 | `pi-statusline.json` | Status line layout |
-| `bin/lmstack-ask` | One-shot bridge for Claude Code and opencode |
 
 The status line shows context and token counts and omits cost. A 16k window is
 the binding constraint when you are serving your own model, and the cost is
@@ -45,14 +44,15 @@ instead of at the first request.
 ## Using it from Claude Code or opencode
 
 Neither can point its own model at an OpenAI-compatible endpoint, but both can
-run a command. `bin/lmstack-ask` is that command.
+run a command. `lmstack-ask` is that command. It lives in the plugin's `bin/`,
+which Claude Code puts on the Bash tool's PATH, so there is nothing to copy:
 
 ```bash
-cp bin/lmstack-ask ~/bin/          # or add this directory to PATH
-
 lmstack-ask "what does this do?" < internal/parse.go
 lmstack-ask -P lmstack-h1 "write a table test for Parse"
 ```
+
+Outside Claude Code, add the repository's `bin/` to your own PATH.
 
 It picks a host by asking which LiteLLM answers — loopback first — and prints
 the choice to stderr. Pin one with `-P`, or export `LMSTACK_PROVIDER`.
