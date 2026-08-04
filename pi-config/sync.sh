@@ -39,6 +39,7 @@ readonly OWNED_PACKAGES=(
 # override back into the tracked file — the tracked file is a statement of
 # what lmstack thinks a lean pi should look like, not a mirror of the live
 # machine.
+# shellcheck disable=SC2034  # referenced in merged_settings via string keys, not by name
 readonly OWNED_SETTINGS_KEYS=(
   "defaultProvider"
   "defaultModel"
