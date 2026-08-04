@@ -390,5 +390,30 @@ else
   bad "T10.16 an unknown outcome was accepted"
 fi
 
+section "T10.17 — a provider lmstack did not generate is still reachable"
+
+# When this was missing, `lmstack-ask -P vllm-inx` reported "no endpoint known"
+# and the exec loop fell back to the 8B it is documented never to use. The
+# fallback was silent: the run started, so nothing looked wrong until the diff
+# came back empty.
+ASK="$REPO_ROOT/bin/lmstack-ask"
+EXT_DIR="$LMSTACK_STATE_DIR/extensions"
+mkdir -p "$EXT_DIR"
+cat > "$EXT_DIR/hand-written.ts" <<'EOF'
+export default { provider: { baseUrl: "http://elsewhere.invalid:4000/v1" } };
+EOF
+
+if [[ "$(LMSTACK_PI_EXTENSIONS="$EXT_DIR" "$ASK" -P hand-written --print-model 2>&1)" != *"no endpoint known"* ]]; then
+  ok "T10.17 a hand-written provider's endpoint is read from its pi extension"
+else
+  bad "T10.17 a provider with an extension was reported as having no endpoint"
+fi
+
+if [[ "$(LMSTACK_PI_EXTENSIONS="$EXT_DIR" "$ASK" -P absent --print-model 2>&1)" == *"no endpoint known"* ]]; then
+  ok "T10.17 a provider with no extension is reported missing, not invented"
+else
+  bad "T10.17 an unknown provider did not report a missing endpoint"
+fi
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

@@ -97,11 +97,23 @@ env_prefix() {
   printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | tr -c '[:alnum:]' '_'
 }
 
+# A provider *is* a pi extension, and the extension is where its endpoint is
+# actually written. Reading it here means a host someone added to pi is a host
+# lmstack can ask, with nothing to register in a second place. Only a literal
+# `baseUrl:` is read: an extension that resolves its URL through `setting(...)`
+# is reading the same env file `setting()` above already reads, and parsing the
+# call here would be a second, worse implementation of that.
+extension_base() {
+  local f="${LMSTACK_PI_EXTENSIONS:-$HOME/.pi/agent/extensions}/$1.ts"
+  [[ -r "$f" ]] || return 0
+  sed -n 's/.*baseUrl:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -1
+}
+
 default_base() {
   case "$1" in
     lmstack-h1) printf 'http://h1-nvidia:4000/v1' ;;
     lmstack-h2) printf 'http://127.0.0.1:4000/v1' ;;
-    *)          printf '' ;;
+    *)          extension_base "$1" ;;
   esac
 }
 

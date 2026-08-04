@@ -100,6 +100,14 @@ then confabulated tasks the brief did not contain. The same brief on a 27B at
 262k landed both edits and a correct commit message on the first try, using 10%
 of its window. Set `PROVIDER` to the biggest stack that is reachable.
 
+**If the big host does not answer, stop. Do not fall back to a smaller one.**
+"Which host answers" and "which host can do this work" are different questions,
+and a probe only answers the first. This has already gone wrong once: a
+`lmstack-ask -P vllm-inx` that failed on a missing endpoint sent the run to the
+8B, which is the exact model the paragraph above says cannot do this. A run that
+refuses to start costs the user nothing; a run on a model that cannot finish
+costs a Forge, a worktree, and the credibility of the verdict that dispatched it.
+
 ```bash
 PROVIDER="vllm-inx"
 MODEL="$(lmstack-ask -P "$PROVIDER" --print-model)"
