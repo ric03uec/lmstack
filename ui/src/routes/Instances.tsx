@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { api, type Instance } from '../api';
 import { fmtLoaded, useAsync } from '../hooks';
 
@@ -172,55 +172,81 @@ function Row({ k, v }: { k: string; v: ReactNode | number | null | undefined }) 
   );
 }
 
+// Vendor marks: prefer a real logo file at /vendor/<slug>.svg (drop the
+// official SVG from the vendor's press kit into ui/public/vendor/ and it
+// takes over — nothing to change in this file). Fall back to a stylised
+// geometric mark when the file is not there, so a fresh checkout still shows
+// something the user recognises.
+//
+// Falling back to a big letter — the previous behaviour, "a big N" and "a big
+// A" — read as a placeholder rather than a badge, which is what motivated the
+// rewrite. A geometric mark reads as intentional even before the official
+// file is added.
 function VendorLogo({ vendor }: { vendor: string | null }) {
   const v = (vendor || '').toLowerCase();
-  if (v === 'nvidia') {
-    return (
-      <div className="vendor vendor-nvidia" aria-label="NVIDIA">
-        <NvidiaMark />
-        <span>NVIDIA</span>
-      </div>
-    );
-  }
-  if (v === 'amd') {
-    return (
-      <div className="vendor vendor-amd" aria-label="AMD">
-        <AmdMark />
-        <span>AMD</span>
-      </div>
-    );
-  }
+  const spec = VENDOR_MARKS[v] || VENDOR_MARKS._generic;
   return (
-    <div className="vendor vendor-generic" aria-label="GPU">
-      <GpuMark />
-      <span>GPU</span>
+    <div className={`vendor vendor-${v || 'generic'}`} aria-label={spec.label}>
+      <VendorMark slug={v} spec={spec} />
+      <span>{spec.label}</span>
     </div>
   );
 }
 
-// Simple stylised marks — deliberately not reproducing the trademarked
-// wordmarks. A large monogram in the vendor's brand hue plus a plain label.
+type MarkSpec = { label: string; color: string; fallback: JSX.Element };
+
+const VENDOR_MARKS: Record<string, MarkSpec> = {
+  nvidia:   { label: 'NVIDIA', color: '#76B900', fallback: <NvidiaMark /> },
+  amd:      { label: 'AMD',    color: '#000000', fallback: <AmdMark /> },
+  _generic: { label: 'GPU',    color: '#656D76', fallback: <GpuMark /> },
+};
+
+function VendorMark({ slug, spec }: { slug: string; spec: MarkSpec }) {
+  const [failed, setFailed] = useState(false);
+  if (!slug || slug === '_generic' || failed) return spec.fallback;
+  // The <img> onError fires when the file is missing, so the fallback SVG
+  // still renders — no 404 in the console for the common "no override" case
+  // once the error has been caught.
+  return (
+    <img
+      src={`/vendor/${slug}.svg`}
+      alt=""
+      width={48}
+      height={48}
+      style={{ borderRadius: 10, background: spec.color }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+// Stylised marks, used until ui/public/vendor/<slug>.svg is dropped in. Not
+// the trademarked wordmarks — an eye-shaped lens for NVIDIA, a chevroned "A"
+// on black for AMD, a card silhouette for the generic case.
 function NvidiaMark() {
   return (
     <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <rect width="48" height="48" rx="10" fill="#76b900"/>
-      <text x="24" y="33" textAnchor="middle" fontFamily="Inter, Arial, sans-serif" fontWeight="800" fontSize="26" fill="#ffffff">N</text>
+      <rect width="48" height="48" rx="10" fill="#76B900"/>
+      <path d="M8 24 C 14 15, 22 13, 28 15 C 36 17, 42 21, 42 24 C 42 27, 36 31, 28 33 C 22 35, 14 33, 8 24 Z" fill="#FFFFFF"/>
+      <path d="M15 24 C 19 19, 24 18, 28 19 C 33 20, 37 22, 37 24 C 37 26, 33 28, 28 29 C 24 30, 19 29, 15 24 Z" fill="#76B900"/>
     </svg>
   );
 }
 function AmdMark() {
   return (
     <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <rect width="48" height="48" rx="10" fill="#ed1c24"/>
-      <text x="24" y="33" textAnchor="middle" fontFamily="Inter, Arial, sans-serif" fontWeight="800" fontSize="26" fill="#ffffff">A</text>
+      <rect width="48" height="48" rx="10" fill="#000000"/>
+      <path d="M24 10 L 40 40 L 32 40 L 29 34 L 19 34 L 16 40 L 8 40 Z" fill="#FFFFFF"/>
+      <path d="M21 30 L 27 30 L 24 22 Z" fill="#000000"/>
     </svg>
   );
 }
 function GpuMark() {
   return (
     <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-      <rect width="48" height="48" rx="10" fill="#656d76"/>
-      <text x="24" y="33" textAnchor="middle" fontFamily="Inter, Arial, sans-serif" fontWeight="800" fontSize="18" fill="#ffffff">GPU</text>
+      <rect width="48" height="48" rx="10" fill="#656D76"/>
+      <rect x="10" y="18" width="28" height="14" rx="2" fill="#FFFFFF"/>
+      <rect x="14" y="22" width="6" height="6" fill="#656D76"/>
+      <rect x="28" y="22" width="6" height="6" fill="#656D76"/>
     </svg>
   );
 }
