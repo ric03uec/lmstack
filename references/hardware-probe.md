@@ -12,7 +12,7 @@ run against a host that has not been bootstrapped yet.
 | `os.kernel` | The amdgpu and NVIDIA driver both live in the kernel; a mismatch between kernel and driver shows up here first. |
 | `gpu.vendor` | `nvidia`, `amd`, or `none`. Decides the host role and nothing else. |
 | `gpu.vram_gib` | NVIDIA discrete: total board memory from `nvidia-smi`. NVIDIA unified (Grace Blackwell, Grace Hopper, Jetson): the unified pool via `libcuda.cuMemGetInfo`, because `nvidia-smi` returns `N/A` for `memory.total` on those parts. AMD: `mem_info_vram_total`, which on an APU is a small carve-out. |
-| `gpu.gtt_gib` | AMD only. The share of system RAM the GPU may map. **On an APU this is the number that matters.** |
+| `gpu.gtt_gib` | AMD only. The share of system RAM the GPU may map, from `mem_info_gtt_total`. **On an APU this is the number that matters.** When the sysfs nodes are unreadable — a restricted container, an amdgpu that has not initialised its info files yet — the probe falls back to the largest `MEMORY_HEAP_DEVICE_LOCAL_BIT` heap `vulkaninfo` reports, and writes that number here. It is the deterministic ceiling for GPU-visible memory. |
 | `gpu.driver` | NVIDIA driver version, or the literal `amdgpu`. Empty on NVIDIA means no usable driver. |
 | `dri_nodes` | The render nodes containers can be given. Empty on an AMD host is fatal. |
 | `vulkan.present` | Whether `vulkaninfo` exists. Bootstrap installs it; absence before bootstrap is expected. |

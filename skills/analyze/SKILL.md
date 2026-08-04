@@ -23,12 +23,17 @@ costs the user an hour of bring-up before they find out.
    The right tool per vendor — the probe already uses these; the rule is here
    so a reader who suspects the probe knows what to check:
 
-   | Case | Authoritative source |
-   |---|---|
-   | NVIDIA discrete | `nvidia-smi --query-gpu=memory.total` (MiB) |
-   | NVIDIA unified (Grace Blackwell, Grace Hopper, Jetson) | CUDA `cuMemGetInfo` via `libcuda.so` — nvidia-smi returns `N/A` on these parts and is not usable |
-   | AMD dGPU | `/sys/class/drm/card*/device/mem_info_vram_total` (bytes) |
-   | AMD APU | `/sys/class/drm/card*/device/mem_info_gtt_total` (bytes) — `vram_total` is a small carve-out and is the wrong number |
+   | Case | Primary source | Fallback |
+   |---|---|---|
+   | NVIDIA discrete | `nvidia-smi --query-gpu=memory.total` (MiB) | CUDA `cuMemGetInfo` |
+   | NVIDIA unified (Grace Blackwell, Grace Hopper, Jetson) | CUDA `cuMemGetInfo` via `libcuda.so` — `nvidia-smi` returns `N/A` on these parts | — |
+   | AMD dGPU | `/sys/class/drm/card*/device/mem_info_vram_total` (bytes) | largest DEVICE_LOCAL heap from `vulkaninfo` |
+   | AMD APU | `/sys/class/drm/card*/device/mem_info_gtt_total` (bytes) — `vram_total` is a small carve-out and the wrong number | largest DEVICE_LOCAL heap from `vulkaninfo` |
+
+   The fallbacks fire only when the primary source is blind. Sysfs is byte-exact
+   from the kernel; the Vulkan fallback exists for the case where a container
+   or an early-boot amdgpu leaves the sysfs nodes empty. Both are deterministic
+   — a heap size in bytes, or a CUDA runtime call. Neither is a guess.
 
    `null` is a finding, and its meaning depends on whether a GPU was detected:
    - **`vendor: none`** — hardware absent or invisible to the kernel. Report and

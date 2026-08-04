@@ -92,5 +92,13 @@ assert_field nvidia-gb10-unified '.usable_gib' 119       "T6.2 GB10 budget is th
 assert_field nvidia-gb10-unified '.recommended | length > 0' true \
   "T6.2 GB10 recommends at least the default"
 
+# AMD parity for the same shape: sysfs blind (containers with restricted /sys,
+# amdgpu still initialising), vulkaninfo's DEVICE_LOCAL heap populated. This is
+# the deterministic fallback — the probe writes it into gtt_gib. Classify must
+# treat it as a usable budget, not zero.
+assert_field amd-apu-vulkan-fallback '.supported'  true   "T6.2 AMD APU with vulkan-only budget is supported"
+assert_field amd-apu-vulkan-fallback '.host_role'  h2-amd "T6.2 AMD APU with vulkan-only budget -> h2-amd"
+assert_field amd-apu-vulkan-fallback '.usable_gib' 21     "T6.2 vulkan DEVICE_LOCAL heap is the budget when sysfs is blind"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

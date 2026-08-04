@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "os": {"id": "ubuntu", "version": "24.04", "pretty": "Ubuntu 24.04.1 LTS", "kernel": "6.11.0-14-generic", "arch": "x86_64"},
+  "mem_total_gib": 62,
+  "gpu": {"vendor": "amd", "model": "AMD Radeon 860M Graphics", "vram_gib": null, "gtt_gib": 21, "driver": "amdgpu"},
+  "dri_nodes": ["/dev/dri/renderD128"],
+  "vulkan": {"present": true, "device": "AMD Radeon 860M Graphics (RADV KRACKAN1)"},
+  "docker": {"present": true, "usable": true, "version": "27.3.1", "runtimes": ["runc"]},
+  "sudo": "passwordless"
+}

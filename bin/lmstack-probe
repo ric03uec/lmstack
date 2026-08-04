@@ -132,6 +132,23 @@ if [[ "$gpu_vendor" == "amd" && -r /proc/modules ]]; then
   gpu_driver="$(awk '$1 == "amdgpu" {print "amdgpu"}' /proc/modules | head -n1)"
 fi
 
+# AMD unified/APU fallback. Sysfs is authoritative when readable — bytes
+# straight from the kernel driver — but a container with a restricted /sys
+# bind mount, or an amdgpu module that has not initialised its info nodes yet,
+# leaves both totals empty. Vulkan sees the same heaps the llama.cpp Vulkan
+# backend will use, so the largest DEVICE_LOCAL heap across non-CPU physical
+# devices is a deterministic ceiling for GPU-visible memory. Only fires when
+# sysfs left nothing, so a working AMD host pays nothing here.
+if [[ "$gpu_vendor" == "amd" && -z "$gpu_vram_gib" && -z "$gpu_gtt_gib" ]] && have vulkaninfo; then
+  gpu_gtt_gib="$(vulkaninfo 2>/dev/null | awk '
+    /^GPU[0-9]+:/                          { keep=0; heap=0 }
+    /deviceType[[:space:]]*=/              { keep = ($NF ~ /INTEGRATED_GPU|DISCRETE_GPU/) }
+    keep && $1 == "size"                   { heap = $3 }
+    keep && /MEMORY_HEAP_DEVICE_LOCAL_BIT/ { if (heap+0 > max+0) max = heap }
+    END { if (max) print int(max / 1073741824) }
+  ')"
+fi
+
 # ---------------------------------------------------------------------------
 # Vulkan. The AMD path serves through it, so "is it installed and does it see a
 # device" is the difference between GPU inference and a silent CPU fallback.
