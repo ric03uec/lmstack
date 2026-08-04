@@ -46,7 +46,7 @@ services:
       - -m
       - /models/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
       - -c
-      - "16384"
+      - "32768"
       - -ngl
       - "999"
       - -np

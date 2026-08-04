@@ -19,14 +19,14 @@
 model_list:
   - model_name: qwen2.5-coder-7b
     model_info:
-      max_input_tokens: 16384
+      max_input_tokens: 32768
     litellm_params:
       model: openai/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF
       api_base: http://llama-qwen2.5-coder-7b:8080/v1
       api_key: dummy
   - model_name: Qwen2.5-Coder-7B-Instruct
     model_info:
-      max_input_tokens: 16384
+      max_input_tokens: 32768
     litellm_params:
       model: openai/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF
       api_base: http://llama-qwen2.5-coder-7b:8080/v1

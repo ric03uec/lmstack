@@ -27,10 +27,16 @@ function setting(name: string, fallback: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
+  // See lmstack-h1.ts: no key means no host of this kind is configured, and a
+  // blank key registered anyway surfaces as "No API key for provider" the
+  // first time anything touches it. Skip registration instead.
+  const apiKey = setting("LMSTACK_H2_KEY", "");
+  if (!apiKey) return;
+
   pi.registerProvider("lmstack-h2", {
     name: "lmstack h2-amd (llama.cpp Vulkan)",
     baseUrl: setting("LMSTACK_H2_URL", "http://127.0.0.1:4000/v1"),
-    apiKey: setting("LMSTACK_H2_KEY", ""),
+    apiKey,
     api: "openai-completions",
     models: [
       {
@@ -39,9 +45,12 @@ export default function (pi: ExtensionAPI) {
         reasoning: false,
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        // Same alias and the same context as h1-nvidia serves. That parity is
-        // the point: switching provider does not change how you prompt.
-        contextWindow: 16384,
+        // Larger than h1-nvidia's 16k on purpose: the unified-memory APU has
+        // enough GTT for the extra KV cache, and pi's system prompt + tool
+        // schemas alone land around 17k input tokens — 16k here would clamp
+        // every tools-mode call to zero-length responses. The alias is still
+        // parity with h1; only the runtime budget differs.
+        contextWindow: 32768,
         maxTokens: 4096,
       },
     ],

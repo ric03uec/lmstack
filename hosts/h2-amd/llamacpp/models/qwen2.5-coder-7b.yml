@@ -5,14 +5,14 @@ hf_repo: bartowski/Qwen2.5-Coder-7B-Instruct-GGUF
 hf_file: Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
 image: ghcr.io/ggml-org/llama.cpp:server-vulkan
 port: 8001
-context: 16384
+context: 32768
 n_gpu_layers: 999
 parallel_slots: 1
 extra_args:
   - --jinja
   - --flash-attn
   - "on"
-vram_estimate_gib: 6
+vram_estimate_gib: 7
 tier: 8g
 mandatory: true
 virtual_models:
@@ -27,10 +27,12 @@ notes: |
   For a repo whose promise is "works on the AMD machine you already have",
   portability beats peak throughput.
 
-  Q4_K_M (~4.7 GiB weights) plus ~1.3 GiB of KV cache at 16384 context fits
-  inside an 8 GiB budget with a little headroom. On unified-memory APUs the
-  relevant limit is the GTT allocation, not a dedicated VRAM pool, so the
-  effective ceiling is usually higher than the BIOS "VRAM" figure suggests.
+  Q4_K_M (~4.7 GiB weights) plus ~2.3 GiB of KV cache at 32768 context sits
+  just under an 8 GiB budget. 32k rather than 16k because pi's system prompt
+  and the combined tool schemas from a default extension set land around
+  17k input tokens on their own — 16k pushes every tools-mode call over the
+  limit. On unified-memory APUs the relevant ceiling is the GTT allocation,
+  not the BIOS "VRAM" figure, so headroom is larger than it looks.
 
   Quantization and tool calling interact. The source deployment this was
   ported from found Q4_K_M improvising tool-call wrappers (<xml>, ```json

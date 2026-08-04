@@ -33,12 +33,21 @@ function setting(name: string, fallback: string): string {
 }
 
 export default function (pi: ExtensionAPI) {
+  // No key means the operator has not stood up an h1-nvidia host. Registering
+  // with a blank key would surface as "No API key for provider: lmstack-h1"
+  // the first time anything touched the provider — a UI-level tab cycle, a
+  // `pi --list-models`, an auto-completion probe. Skipping the registration
+  // is quieter and correct: nothing is misconfigured, this host simply is
+  // not part of the setup.
+  const apiKey = setting("LMSTACK_H1_KEY", "");
+  if (!apiKey) return;
+
   pi.registerProvider("lmstack-h1", {
     name: "lmstack h1-nvidia (vLLM)",
     // The default assumes an ~/.ssh/config or Tailscale name for the host.
     // Set LMSTACK_H1_URL if yours is reachable under a different name.
     baseUrl: setting("LMSTACK_H1_URL", "http://h1-nvidia:4000/v1"),
-    apiKey: setting("LMSTACK_H1_KEY", ""),
+    apiKey,
     api: "openai-completions",
     models: [
       {
