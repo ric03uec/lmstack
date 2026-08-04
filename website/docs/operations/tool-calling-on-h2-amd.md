@@ -117,6 +117,24 @@ Until then, the split is deliberate: **h1-nvidia → Qwen 2.5 Coder under vLLM
 (xgrammar handles the schema-constrained decoding server-side, no fencing
 issue), h2-amd → Hermes 3 under llama.cpp**.
 
+## pi will show tool calls but not run them until the directory is trusted
+
+Independent of everything above — pi auto-approves tool execution only in
+directories listed in `~/.pi/agent/trust.json`. If tool calls render in the
+UI as `bash "…"` but nothing runs, the stack is working and pi is refusing to
+execute for a permissions reason:
+
+```bash
+jq '. + {"/full/path/to/your/project": true}' ~/.pi/agent/trust.json \
+  | sponge ~/.pi/agent/trust.json
+# or, per-run:
+pi --approve --provider lmstack-h2 …
+```
+
+This tripped an entire debugging session ("system stack works, lmstack
+doesn't, same box, same model") because the system directory was trusted and
+the lmstack directory wasn't.
+
 ## If you're debugging this on your own box
 
 - `pi --provider lmstack-h2 --mode json -p "call bash with 'uname -r'"` and

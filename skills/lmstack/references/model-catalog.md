@@ -54,13 +54,13 @@ Do not put a model behind an agent loop without running T3.4 against it.
 `virtual_models` is a list of names LiteLLM will serve, all backed by the same
 loaded weights. Two uses:
 
-- **Parity.** When two hosts share an alias, `pi --provider …` is the only thing
-  that changes when you swap them. `tests/parity.yml` declares which aliases
-  must be common across a list of hosts; it is enforced only when the list is
-  non-empty. Currently the list is empty — h2-amd serves `hermes-3-llama-3.1-8b`
-  because llama.cpp cannot extract tool calls from Qwen 2.5 Coder's markdown-
-  fenced output. Restore the alias to the list when the underlying issue is
-  resolved (see docs/tool-calling-on-h2-amd.md).
+- **Parity.** `virtual_models` lets the same alias appear on hosts with
+  different engines, so `pi --provider …` is the only thing that changes when
+  you swap them. `tests/parity.yml` declares which aliases must be common;
+  it enforces the list only when it is non-empty. No alias is currently
+  required in common — h2-amd serves `hermes-3-llama-3.1-8b` because
+  llama.cpp cannot extract tool calls from Qwen 2.5 Coder's markdown-fenced
+  output (see docs/tool-calling-on-h2-amd.md).
 - **Aliasing an upstream name.** Serving both `qwen2.5-coder-7b` and
   `Qwen2.5-Coder-7B-Instruct` means a tool that hardcodes the HuggingFace name
   works without configuration.
