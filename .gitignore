@@ -250,3 +250,12 @@ website/.docusaurus/
 
 # Claude Code local runtime state (scheduled task locks, session scratch).
 .claude/
+
+# UI: React + Vite build outputs live under ui/. The Python `dist/` rule
+# above would swallow ui/dist/, which we want committed so end users don't
+# need Node just to view the UI.
+ui/node_modules/
+ui/.vite/
+ui/tsconfig.tsbuildinfo
+!ui/dist/
+!ui/dist/**
