@@ -251,11 +251,12 @@ website/.docusaurus/
 # Claude Code local runtime state (scheduled task locks, session scratch).
 .claude/
 
-# UI: React + Vite build outputs live under ui/. The Python `dist/` rule
-# above would swallow ui/dist/, which we want committed so end users don't
-# need Node just to view the UI.
+# UI: React + Vite build outputs live under ui/. `ui/dist/` is a build
+# artifact and not tracked — `bin/lmstack-ui` prints the install-and-build
+# command when the bundle is missing, so first run reads as a one-time setup
+# rather than a broken repo. The top-level `dist/` rule above already covers
+# it; the entry here is for readers who look for UI paths in one place.
 ui/node_modules/
 ui/.vite/
 ui/tsconfig.tsbuildinfo
-!ui/dist/
-!ui/dist/**
+ui/dist/
