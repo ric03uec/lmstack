@@ -7,15 +7,36 @@ export type ForgeStatus =
   | 'cleaned'
   | 'stale';
 
+export interface InstanceModel {
+  slug: string | null;
+  hfModel?: string | null;
+  engine?: string | null;
+  port?: number | null;
+  contextTokens?: number | null;
+  maxNumSeqs?: number | null;
+  vramEstimateGib?: number | null;
+  tier?: string | null;
+  quant?: string | null;
+  active: boolean;
+}
+
 export interface Instance {
   role: string;
-  host?: string;
-  engine?: string;
-  gpu?: string;
-  models: string[];
-  probeAt?: string;
-  verdict?: string;
+  connection: string | null;
+  installedAt: string | null;
+  verdict: string | null;
+  engine: { kind: string | null; reason: string | null; host: string | null };
+  gpu: { vendor: string | null; model: string | null; vramGib: number | null; gttGib: number | null; driver: string | null } | null;
+  os: { pretty: string | null; kernel: string | null; arch: string | null } | null;
+  memory: { totalGib: number } | null;
+  docker: { present: boolean; usable: boolean; version: string | null; runtimes: string[] } | null;
+  vulkan: { present: boolean; device: string | null } | null;
+  arithmetic: string[];
+  warnings: string[];
+  activeModels: string[];
+  models: InstanceModel[];
   counts: { running: number; in_review: number; queued: number; merged: number; failed: number; cleaned: number; stale: number };
+  sources: { hostYaml: boolean; probeJson: boolean; classifyJson: boolean };
 }
 
 export interface ForgeSummary {

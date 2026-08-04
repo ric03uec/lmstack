@@ -80,13 +80,38 @@ If `supported` is `false`, relay `reason` and `remedy`, log the failure, and
 
 ## Step 4 — Record and hand off
 
-Write the probe where install will find it. This is the only file this skill
-creates:
+Write three files into `~/.lmstack/<role>/` so downstream commands and the
+read-only web UI (`lmstack-ui`) can render the host without re-probing.
 
 ```bash
 mkdir -p "$HOME/.lmstack/<role>"
+
+# 1. the raw probe — what the machine reported about itself
 cp /tmp/lmstack-probe.json "$HOME/.lmstack/<role>/probe.json"
+
+# 2. the classifier verdict — engine choice, arithmetic, warnings, models
+lmstack-classify --probe /tmp/lmstack-probe.json \
+  > "$HOME/.lmstack/<role>/classify.json"
+
+# 3. a minimal host.yml — the identity of this role, so a reader that has
+#    opened only one file still knows the role, its connection, and the
+#    engine that will drive it. `install` overwrites this with the final
+#    version (adding active_models and installed_at) later; this stub is
+#    for the window between analyze and install.
+cat > "$HOME/.lmstack/<role>/host.yml" <<YAML
+role: <role>
+connection: <local|ssh-target>
+verdict: <supported|unsupported>
+engine: <vllm|llamacpp>
+gpu: "<gpu model from probe>"
+active_models: []
+YAML
 ```
+
+All three files are read-only inputs to the UI and to `install`. Any of them
+missing is a "run `/lmstack:analyze <target>` again" — the UI shows a hint on
+the instance card when a file is missing, so a partial write is safe but
+visible.
 
 Then log it:
 

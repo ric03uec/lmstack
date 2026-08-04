@@ -311,6 +311,16 @@ async function ensureDir(p) {
   try { mkdirSync(p, { recursive: true }); } catch {}
 }
 
+// Best-effort vendor from the role name — matches lmstack's `h1-nvidia`,
+// `h2-amd` convention. Only used when probe.json is missing so the UI can
+// still render a vendor badge. Overridden by probe.gpu.vendor once present.
+function inferVendorFromRole(role) {
+  if (!role) return null;
+  if (/nvidia/i.test(role)) return 'nvidia';
+  if (/amd/i.test(role) || /rocm/i.test(role) || /radeon/i.test(role)) return 'amd';
+  return null;
+}
+
 // Reserved top-level names inside ~/.lmstack/ that are never role directories.
 const RESERVED = new Set([
   'runs', 'worktrees', 'env', 'templates', 'models', 'models-gguf', 'litellm',
@@ -371,6 +381,13 @@ async function readHostYaml(role) {
 async function readProbeJson(role) {
   try {
     const text = await readFile(join(LMSTACK_HOME, role, 'probe.json'), 'utf8');
+    return JSON.parse(text);
+  } catch { return null; }
+}
+
+async function readClassifyJson(role) {
+  try {
+    const text = await readFile(join(LMSTACK_HOME, role, 'classify.json'), 'utf8');
     return JSON.parse(text);
   } catch { return null; }
 }
@@ -498,22 +515,98 @@ async function getInstances() {
   const all = await collectForges();
   const out = [];
   for (const role of roles) {
-    const host = await readHostYaml(role);
-    const probe = await readProbeJson(role);
-    const forges = all.filter((f) => f.role === role);
-    const counts = countByStatus(forges);
-    out.push({
-      role,
-      host: host.connection || null,
-      engine: host.engine || probe?.engine || null,
-      gpu: host.gpu || probe?.gpu || probe?.gpu_name || null,
-      models: Array.isArray(host.active_models) ? host.active_models : (host.active_models ? [host.active_models] : []),
-      probeAt: probe?.probed_at || probe?.timestamp || host.installed_at || null,
-      verdict: host.verdict || null,
-      counts,
-    });
+    out.push(await buildInstance(role, all));
   }
   return out;
+}
+
+// Merge whatever we can read from host.yml / probe.json / classify.json
+// into one shape the UI can render as a full-width card. Missing files are
+// reported in `sources` so the UI can render an explicit empty-state hint
+// rather than a card full of dashes.
+async function buildInstance(role, allForges) {
+  const host = await readHostYaml(role);
+  const probe = await readProbeJson(role);
+  const classify = await readClassifyJson(role);
+  const forges = (allForges || []).filter((f) => f.role === role);
+  const counts = countByStatus(forges);
+
+  const activeModels = Array.isArray(host.active_models)
+    ? host.active_models
+    : (host.active_models ? [host.active_models] : []);
+
+  // Merge classify.models (with per-model params) with active_models
+  // (which names the ones currently live on the host).
+  const classifyModels = Array.isArray(classify?.models) ? classify.models : [];
+  const models = classifyModels.length
+    ? classifyModels.map((m) => ({
+        slug: m.slug || m.name || null,
+        hfModel: m.hf_model || null,
+        engine: m.engine || null,
+        port: m.port ?? null,
+        contextTokens: m.max_model_len ?? m.context_tokens ?? null,
+        maxNumSeqs: m.max_num_seqs ?? null,
+        vramEstimateGib: m.vram_estimate_gib ?? null,
+        tier: m.tier || null,
+        quant: m.quant || null,
+        active: activeModels.includes(m.slug) || activeModels.includes(m.name),
+      }))
+    : activeModels.map((slug) => ({ slug, active: true }));
+
+  return {
+    role,
+    connection: host.connection || null,
+    installedAt: host.installed_at || null,
+    verdict: host.verdict || classify?.supported === false ? host.verdict || 'unsupported' : host.verdict || (classify ? 'supported' : null),
+    engine: {
+      kind: host.engine || classify?.engine || null,
+      reason: classify?.reason || null,
+      host: classify?.host || null,
+    },
+    gpu: probe?.gpu
+      ? {
+          vendor: probe.gpu.vendor || inferVendorFromRole(role),
+          model: probe.gpu.model || null,
+          vramGib: probe.gpu.vram_gib ?? null,
+          gttGib: probe.gpu.gtt_gib ?? null,
+          driver: probe.gpu.driver || null,
+        }
+      : (inferVendorFromRole(role)
+          ? { vendor: inferVendorFromRole(role), model: null, vramGib: null, gttGib: null, driver: null }
+          : null),
+    os: probe?.os
+      ? {
+          pretty: probe.os.pretty || null,
+          kernel: probe.os.kernel || null,
+          arch: probe.os.arch || null,
+        }
+      : null,
+    memory: probe?.mem_total_gib != null ? { totalGib: probe.mem_total_gib } : null,
+    docker: probe?.docker
+      ? {
+          present: !!probe.docker.present,
+          usable: !!probe.docker.usable,
+          version: probe.docker.version || null,
+          runtimes: Array.isArray(probe.docker.runtimes) ? probe.docker.runtimes : [],
+        }
+      : null,
+    vulkan: probe?.vulkan
+      ? {
+          present: !!probe.vulkan.present,
+          device: probe.vulkan.device || null,
+        }
+      : null,
+    arithmetic: Array.isArray(classify?.arithmetic) ? classify.arithmetic : [],
+    warnings: Array.isArray(classify?.warnings) ? classify.warnings : [],
+    activeModels,
+    models,
+    counts,
+    sources: {
+      hostYaml: existsSync(join(LMSTACK_HOME, role, 'host.yml')),
+      probeJson: probe != null,
+      classifyJson: classify != null,
+    },
+  };
 }
 
 function countByStatus(forges) {
