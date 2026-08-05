@@ -8,6 +8,8 @@ Bring a DGX Spark, a gaming desktop, or the AMD laptop you already own. The
 default catalog comes up on **8 GB of VRAM**. If you have more, the skill
 notices and offers you more.
 
+**📖 Docs:** <https://ric03uec.github.io/lmstack> · [Install](https://ric03uec.github.io/lmstack/install) · [Hosts](https://ric03uec.github.io/lmstack/hosts/h1-nvidia) · [Troubleshooting](https://ric03uec.github.io/lmstack/operations/troubleshooting)
+
 ## Quickstart
 
 You need four things on the control host — the machine you write code on:
