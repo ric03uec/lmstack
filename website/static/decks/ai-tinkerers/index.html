@@ -35,6 +35,12 @@
       width: 1280,
       height: 720,
       margin: 0.06,
+      // Space is repurposed below (pause/play the cast on demo slides, no-op
+      // elsewhere) so the presenter never advances a slide by mistake while
+      // reaching for the pause key. Setting the keyCode to null disables
+      // Reveal's own handler; arrows, PageUp/PageDown and clickers are
+      // untouched and remain the way to move.
+      keyboard: { 32: null },
       plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
     });
 
@@ -55,18 +61,68 @@
           requestAnimationFrame(() => {
             if (seen.has(el) || el.clientWidth === 0) return;
             seen.add(el);
-            AsciinemaPlayer.create(el.dataset.cast, el, {
+            // data-max-width shrinks the container before fit measures it, so a
+            // 100-col cast that would otherwise render at 11-12px/char can be
+            // pinned to a smaller size for slides where readability at the back
+            // of the room matters less than fitting more content on screen.
+            if (el.dataset.maxWidth) el.style.maxWidth = el.dataset.maxWidth + 'px';
+            const player = AsciinemaPlayer.create(el.dataset.cast, el, {
               autoPlay: true,
               loop: true,
               theme: 'monokai',
+              // fit:'width' scales the terminal to fill the panel width, with
+              // all 24 rows always visible (no clipping of pi's bottom status
+              // bar) and no empty void around a tiny native-size terminal.
+              // Text size is then a function of the panel width: to make text
+              // smaller, use a narrower panel via data-max-width; to make it
+              // bigger, use a wider panel. That is the only knob.
               fit: 'width',
+              // controls: true keeps the play/pause + progress bar visible even
+              // when the pointer is elsewhere, which matters on a projector
+              // where you cannot hover to reveal them.
+              controls: true,
+              speed: Number(el.dataset.speed) || 1,
+              idleTimeLimit: Number(el.dataset.idle) || 2,
             });
+            // Store the player + a live play/pause flag on the container so
+            // the space handler below can find it. autoPlay starts us in the
+            // playing state; the two listeners keep the flag honest whether
+            // the user hits space, clicks the on-screen controls, or the
+            // player loops back to the beginning.
+            el._apPlayer = player;
+            el._apPlaying = true;
+            player.addEventListener('play',  () => { el._apPlaying = true;  });
+            player.addEventListener('pause', () => { el._apPlaying = false; });
           });
         });
       };
 
       mount(Reveal.getCurrentSlide());
       Reveal.on('slidechanged', (e) => mount(e.currentSlide));
+
+      // Space is the pause/play key. On a demo slide with a mounted cast it
+      // toggles the player; anywhere else it does nothing at all — the intent
+      // is that a stray space press never moves the deck.
+      //
+      // Registered in the capture phase, with stopImmediatePropagation on the
+      // active branches, because asciinema-player 3 installs its own space
+      // handler on its root element. Without capture, once the user clicks
+      // into a player it grabs focus, both handlers fire in the bubble phase,
+      // and the two toggles cancel out — that was harvest working but exec
+      // looking dead. Running first lets us take the key and stop it there.
+      window.addEventListener('keydown', (e) => {
+        if (e.code !== 'Space' && e.key !== ' ') return;
+        // Do not fight the user when they are typing in speaker notes, the
+        // slide URL, or any input control.
+        const t = e.target;
+        if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName))) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const slide = Reveal.getCurrentSlide();
+        const el = slide && slide.querySelector('.demo-player[data-cast]');
+        if (!el || !el._apPlayer) return;
+        (el._apPlaying ? el._apPlayer.pause() : el._apPlayer.play());
+      }, true);
     });
   </script>
 </body>

@@ -299,9 +299,11 @@ Now show that it is two agents, not one:
 
 ```
 Ctrl+a w          # window list: lm-exec and lm-judge
-Ctrl+a 0          # lm-exec  — pi, running the local model, writing code
-Ctrl+a 1          # lm-judge — claude, idle until called
+Ctrl+a 1          # lm-exec  — pi, running the local model, writing code
+Ctrl+a 2          # lm-judge — claude, idle until called
 ```
+
+`base-index` is 1 in this tmux config, so the windows are 1 and 2, not 0 and 1.
 
 Hold on `lm-exec` while it works. Let real output scroll. `--idle-time-limit`
 handles the pauses.
@@ -423,6 +425,7 @@ Stop and report rather than working around any of these:
 - Do not merge the PR on camera.
 - Do not show `~/.lmstack/stack.env`, `~/.pi/agent/extensions/.env`, or any
   `LITELLM_MASTER_KEY` / `HF_TOKEN` / `sk-…` value.
-- Do not record the `real-example.cast` slide from this script. It is a
-  different artifact — a walkthrough of one already-merged PR — and it is not
-  yet specified.
+- Do not name the orchestrator session `lmstack-<anything>`. `lmstack-forge
+  status` with no key lists every session matching `^lmstack-`, so an
+  orchestrator in that namespace is reported as a live forge and trips the
+  "one at a time" guard in `skills/exec/SKILL.md`. Use `demo-orch`.

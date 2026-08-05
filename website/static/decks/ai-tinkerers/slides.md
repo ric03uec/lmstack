@@ -120,7 +120,7 @@ Merged work changes the repo, which changes the queue — that's why it's a loop
 
 ## Demo — `harvest`
 
-<div class="demo-player" data-cast="harvest.cast"></div>
+<div class="demo-player" data-cast="harvest.cast" data-speed="2" data-idle="1" data-max-width="1060"></div>
 
 Note:
 PLACEHOLDER RECORDING. Full procedure: RECORDING.md in this directory, section 3.
@@ -136,7 +136,7 @@ the queue is the artefact.
 
 ## Demo — `exec`
 
-<div class="demo-player" data-cast="exec.cast"></div>
+<div class="demo-player" data-cast="exec.cast" data-speed="1" data-idle="1" data-max-width="1060"></div>
 
 Note:
 PLACEHOLDER RECORDING. Full procedure: RECORDING.md in this directory, section 4.
@@ -154,12 +154,13 @@ Say out loud that the merge is still a human decision. Stop at the PR url.
 
 ## Demo — Dashboard
 
-<img src="local-ui.svg" alt="lmstack local dashboard" />
+<img src="forges.png" alt="lmstack local dashboard — Forges page: 14 live, 1 running, 13 queued" />
 
 <p class="cap">Local dashboard — queue, runs, verdicts · <code>127.0.0.1:7878</code>, read-only</p>
 
 Note:
-PLACEHOLDER IMAGE — swap in a real screenshot of the local dashboard.
+Real screenshot of the Forges page at 127.0.0.1:7878/#/forges — 14 live forges,
+one running, thirteen queued, all on h1-nvidia.
 Start it with `lmstack-ui start`; it serves 127.0.0.1:7878 and is read-only — it
 renders ~/.lmstack/ and mutates nothing.
 Walk it in one pass: the queue, then a run, then a verdict. That is the whole loop,

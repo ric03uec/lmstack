@@ -160,15 +160,20 @@
 /* Demo slides: asciinema-player embed, sized to fit within the slide.
    One rule per player instance — see index.html, players are mounted lazily
    on slidechanged and keyed off .demo-player[data-cast]. */
-.reveal section.demo h2 { font-size: 1.2em; margin-bottom: 0.4em; }
+/* Demo slides take the full slide, not the docs-page margin. The heading is
+   trimmed so the player owns nearly the whole 1280x720 canvas — big enough
+   that the terminal is legible from the back of the room even at a small
+   fixed font size, with room below the controls bar so the last-frame dwell
+   is not flush against the slide edge. */
+.reveal section.demo { padding: 0.3em 0.4em; }
+.reveal section.demo h2 { font-size: 1em; margin: 0 0 0.3em; }
 .reveal .demo-player {
-  /* Width, not height, is the real control here: the players are created with
-     fit:'width', so the player sizes its own height from the container width.
-     At the full 1280 the natural height of a 100x22 cast plus its control bar
-     is 672px, which overflowed the 620 cap and clipped the bottom row.
-     1280 * (620/672) ~= 1181, so capping the width lands the height at ~619.
-     The max-height stays as a guard, not as the mechanism. */
-  max-width: 1180px;
+  /* Width is now purely a panel-size decision — the player is created with
+     fit:false and its font size comes from data-font-size, so the terminal
+     inside does not scale with this box. Cap at ~1240px (near the slide's
+     usable width at Reveal's default margin) and let the terminal centre
+     inside; per-slide max-width overrides via data-max-width still win. */
+  max-width: 1240px;
   max-height: 640px;
   margin: 0 auto;
   overflow: hidden;
