@@ -30,11 +30,16 @@ export function Instances() {
 function InstanceCard({ inst }: { inst: Instance }) {
   const total = inst.counts.running + inst.counts.in_review + inst.counts.queued
     + inst.counts.merged + inst.counts.failed + inst.counts.cleaned + inst.counts.stale;
-  const missing = [
-    !inst.sources.hostYaml && 'host.yml',
-    !inst.sources.probeJson && 'probe.json',
-    !inst.sources.classifyJson && 'classify.json',
-  ].filter(Boolean) as string[];
+  // Only surface a loud hint when the *critical* file is missing (probe.json).
+  // If host.yml or classify.json alone are absent the card still has useful
+  // hardware/model info — a big yellow banner over that is noise.
+  const missing = inst.sources.probeJson
+    ? []
+    : ([
+        !inst.sources.hostYaml && 'host.yml',
+        !inst.sources.probeJson && 'probe.json',
+        !inst.sources.classifyJson && 'classify.json',
+      ].filter(Boolean) as string[]);
 
   return (
     <section className="inst">
@@ -65,6 +70,7 @@ function InstanceCard({ inst }: { inst: Instance }) {
 
       <div className="inst-grid">
         <Section title="Hardware">
+          <Row k="Host / IP" v={inst.connection || (inst.sources.probeJson ? 'unknown' : null)} />
           <Row k="GPU"      v={inst.gpu?.model} />
           <Row k="VRAM"     v={fmtGib(inst.gpu?.vramGib)} />
           <Row k="GTT"      v={fmtGib(inst.gpu?.gttGib)} />

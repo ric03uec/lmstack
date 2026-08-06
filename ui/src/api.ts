@@ -134,6 +134,8 @@ export function fmtWall(min: number | null | undefined): string {
   return `${h}h${m ? ` ${m}m` : ''}`;
 }
 
+export const fmtExecTime = fmtWall;
+
 export function shortKey(key: string): string {
   // owner__repo#num → owner/repo#num
   return key.replace('__', '/');

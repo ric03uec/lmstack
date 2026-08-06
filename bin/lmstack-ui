@@ -412,17 +412,37 @@ async function readTasksForRole(role) {
 }
 
 async function liveTmuxSessions() {
-  try {
-    const { stdout } = await execFileP('tmux', ['list-sessions', '-F', '#{session_name}']);
-    const alive = new Set();
-    for (const line of stdout.split(/\r?\n/)) {
-      const s = line.trim();
-      if (s.startsWith('lmstack-')) alive.add(s.slice('lmstack-'.length));
-    }
-    return alive;
-  } catch {
-    return new Set();
+  // tmux keeps one socket per named server under /tmp/tmux-<uid>/. A forge
+  // started from inside `tmux -L demo` lives on the `demo` socket, not the
+  // default one, so querying the default socket alone silently marks live
+  // forges as stale. Enumerate every socket for this user and union the
+  // sessions across all of them.
+  const alive = new Set();
+  const sockets = await listTmuxSockets();
+  for (const sock of sockets) {
+    try {
+      const args = sock === '' ? [] : ['-L', sock];
+      const { stdout } = await execFileP('tmux', [...args, 'list-sessions', '-F', '#{session_name}']);
+      for (const line of stdout.split(/\r?\n/)) {
+        const s = line.trim();
+        if (s.startsWith('lmstack-')) alive.add(s.slice('lmstack-'.length));
+      }
+    } catch { /* dead socket or none — skip */ }
   }
+  return alive;
+}
+
+async function listTmuxSockets() {
+  // The default socket has no `-L` name; represent it as ''. Named sockets
+  // are the file names under /tmp/tmux-<uid>/, minus the well-known control
+  // sockets tmux itself creates (none currently, but be conservative).
+  const dir = `/tmp/tmux-${process.getuid ? process.getuid() : ''}`;
+  const out = [''];
+  try {
+    const entries = await readdir(dir);
+    for (const name of entries) if (name !== 'default') out.push(name);
+  } catch { /* dir may not exist; default-only is fine */ }
+  return out;
 }
 
 async function readLedger() {
@@ -701,18 +721,98 @@ async function getLog(key, which, tail) {
   if (!existsSync(path)) return { lines: [], sizeBytes: 0, truncated: false, exists: false, path };
   const s = statSync(path);
   const size = s.size;
-  const window = Math.min(size, 64 * 1024);
+  // Read a bigger window than we plan to display, because collapsing spinner
+  // frames and TUI chrome throws away most of the raw bytes and we want the
+  // *useful* tail to be `tail` long, not the raw tail.
+  const window = Math.min(size, 512 * 1024);
   const start = size - window;
   const fd = openSync(path, 'r');
   const buf = Buffer.alloc(window);
   readSync(fd, buf, 0, window, start);
   closeSync(fd);
   const text = stripAnsi(buf.toString('utf8'));
-  const allLines = text.split(/\r?\n/);
+  const rawLines = text.split(/\r?\n/);
   // If we didn't read from byte 0, the first partial line is likely truncated — drop it.
-  const linesTrimmed = start > 0 && allLines.length > 0 ? allLines.slice(1) : allLines;
-  const kept = linesTrimmed.slice(-tail).filter((l, i, arr) => !(i === arr.length - 1 && l === ''));
-  return { lines: kept, sizeBytes: size, truncated: start > 0 || linesTrimmed.length > tail, exists: true, path };
+  const linesTrimmed = start > 0 && rawLines.length > 0 ? rawLines.slice(1) : rawLines;
+  const cleaned = cleanTuiLog(linesTrimmed);
+  const kept = cleaned.slice(-tail).filter((l, i, arr) => !(i === arr.length - 1 && l === ''));
+  return { lines: kept, sizeBytes: size, truncated: start > 0 || cleaned.length > tail, exists: true, path };
+}
+
+// tmux `pipe-pane` captures the exact byte stream a TUI writes to the pty —
+// spinner frames, carriage-return overwrites, and box-drawing chrome. Rendered
+// as text in a browser <pre>, that stream is unreadable: every spinner tick
+// stays visible and every screen redraw multiplies the noise.
+//
+// The output of this function is not a faithful replay of the terminal — it
+// is the *scroll-back* a reader would see if they scrolled up past the live
+// TUI region. Judgement calls:
+//   • `\r` (carriage return) → treat as a line break too, so an overwritten
+//     spinner frame becomes its own candidate line we can filter out. Trying
+//     to reconstruct "what would be on screen" from CR + column-relative
+//     escapes was tried and is wrong for typed shell input, where each
+//     character emits a fresh CR-terminated frame.
+//   • Spinner frames (braille dots + "Working…") → drop entirely.
+//   • Box-drawing-only lines and pure-whitespace runs → collapse.
+//   • Prompt/status lines emitted by the Claude Code TUI (worktree path,
+//     token counter) → drop; they belong to the live UI, not the log.
+//   • Streaming-token growth (`Done`, `Done. The`, `Done. The commit …`) →
+//     when consecutive lines form a strict prefix chain, keep only the
+//     longest. This is the single biggest source of noise from an LLM TUI.
+function cleanTuiLog(lines) {
+  const SPINNER = /^\s*[⠁-⣿]\s+Working/;
+  const BOX_ONLY = /^[\s─-╿]+$/;
+  const WORKTREE_PROMPT = /^~?\/.*\/worktrees\/.+\s+\([^)]+\)\s*$/;
+  const STATUS_BAR = /^[↑↓][0-9]/;
+  // Elapsed / Cost / tps counters emitted by the exec TUI's live footer.
+  const LIVE_COUNTER = /^\s*(?:Elapsed|Cost|Tokens|Speed|tps)\b/i;
+  // Claude Code judge TUI: `[HH:MM:SS] /path on git:... | model | $cost` footer.
+  const CC_STATUS = /^\s*\[\d{2}:\d{2}:\d{2}\][^|]*\|[^|]*\|[^|]*$/;
+  // Bare `%` at line start is zsh's "no trailing newline" marker.
+  const ZSH_PARTIAL = /^\s*%\s*$/;
+  // Lone permission/mode indicators the judge TUI prints on redraw.
+  const CC_HINT = /^\s*⏵⏵bypasspermissions|^\s*●high·\/effort\s*$/;
+  const CONTROL_CHARS = /[\x00-\x08\x0b\x0c\x0e-\x1f]/g;
+
+  const out = [];
+  for (const raw of lines) {
+    // Turn CR into LF: a spinner or streaming redraw is CR-separated, and
+    // splitting each into its own candidate line makes downstream filters
+    // (spinner match, prefix collapse) actually apply.
+    const frames = raw.replace(CONTROL_CHARS, '').split('\r');
+    for (const frame of frames) {
+      const line = frame.replace(/\s+$/, '');
+      if (SPINNER.test(line)) continue;
+      if (WORKTREE_PROMPT.test(line)) continue;
+      if (STATUS_BAR.test(line)) continue;
+      if (BOX_ONLY.test(line)) continue;
+      if (LIVE_COUNTER.test(line)) continue;
+      if (CC_STATUS.test(line)) continue;
+      if (CC_HINT.test(line)) continue;
+      if (ZSH_PARTIAL.test(line)) continue;
+      // Collapse consecutive blank lines to at most one.
+      if (line === '') {
+        if (out.length && out[out.length - 1] !== '') out.push('');
+        continue;
+      }
+      // Look back past blank lines for the most recent non-blank line — the
+      // TUI often intersperses blank redraws between streaming-token frames,
+      // and we still want to collapse "Under" → "Understood." across them.
+      let bi = out.length - 1;
+      while (bi >= 0 && out[bi] === '') bi--;
+      const prev = bi >= 0 ? out[bi] : null;
+      if (prev === line) continue;
+      if (prev && line.startsWith(prev)) {
+        out.length = bi;                       // drop prev + trailing blanks
+        out.push(line);
+        continue;
+      }
+      if (prev && prev.startsWith(line)) continue;
+      out.push(line);
+    }
+  }
+  while (out.length && out[out.length - 1] === '') out.pop();
+  return out;
 }
 
 // Strip CSI/OSC/other ANSI escape sequences that tmux `pipe-pane` emits.
@@ -722,7 +822,9 @@ function stripAnsi(s) {
   let out = s.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
   // OSC sequences: ESC ] ... BEL  or  ESC ] ... ESC \
   out = out.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '');
-  // Two-byte escapes (SS2/SS3/RIS/etc.) and stray ESC
+  // Application/normal keypad mode (DECKPAM/DECKPNM: ESC = / ESC >).
+  out = out.replace(/\x1b[=>]/g, '');
+  // Two-byte escapes (SS2/SS3/RIS/etc.) and stray ESC.
   out = out.replace(/\x1b[@-Z\\-_]/g, '');
   return out;
 }

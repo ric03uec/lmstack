@@ -62,7 +62,7 @@ export function App() {
             <span className="icon"><HammerIcon /></span> Forges
           </a>
           <a href="#/ledger" className={isActive('ledger') ? 'active' : ''}>
-            <span className="icon"><BookIcon /></span> Ledger
+            <span className="icon"><BookIcon /></span> History
           </a>
         </nav>
       </aside>

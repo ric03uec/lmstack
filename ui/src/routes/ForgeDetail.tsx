@@ -1,6 +1,21 @@
+import { useState, useMemo } from 'react';
+import { marked } from 'marked';
 import { api, fmtWall, shortKey } from '../api';
 import { fmtLoaded, useAsync } from '../hooks';
 import { StatusBadge } from '../components/StatusBadge';
+
+// Configure marked once: GFM tables/task-lists, single-newline line breaks
+// (LLM briefs use `\n` for paragraph breaks and expect them to render).
+marked.setOptions({ gfm: true, breaks: true });
+
+// The brief and judge rounds are written by our own tools into files under
+// ~/.lmstack/ — this UI is the only reader. We trust the content and render
+// it without sanitising; if a future feature ever exposes untrusted markdown
+// here, add a sanitiser (e.g. DOMPurify) before this call.
+function Markdown({ src }: { src: string }) {
+  const html = useMemo(() => marked.parse(src) as string, [src]);
+  return <div className="md" dangerouslySetInnerHTML={{ __html: html }} />;
+}
 
 export function ForgeDetail({ forgeKey }: { forgeKey: string }) {
   const detail = useAsync(() => api.forge(forgeKey), [forgeKey]);
@@ -70,36 +85,75 @@ function Detail({ data, execLog, judgeLog }: {
 
       <div className="panel">
         <h3>Brief</h3>
-        {run.brief ? <pre>{run.brief}</pre> : <div className="empty">no brief.md on disk</div>}
+        {run.brief ? <Markdown src={run.brief} /> : <div className="empty">no brief.md on disk</div>}
       </div>
 
       <div className="panel">
         <h3>Judge rounds ({run.judgeRounds.length})</h3>
         {run.judgeRounds.length === 0 && <div className="empty">(none yet)</div>}
         {run.judgeRounds.map((r) => (
-          <div key={r.n} style={{ marginBottom: 12 }}>
-            <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>round {r.n}</div>
-            <pre>{r.text}</pre>
+          <div key={r.n} style={{ marginBottom: 16 }}>
+            <div className="round-label">round {r.n}</div>
+            <Markdown src={r.text} />
           </div>
         ))}
       </div>
 
-      <div className="logs">
-        <LogPane title="lm-exec" log={execLog} />
-        <LogPane title="lm-judge" log={judgeLog} />
-      </div>
+      <LogTabs execLog={execLog} judgeLog={judgeLog} />
     </>
   );
 }
 
-function LogPane({ title, log }: { title: string; log: import('../api').LogTail | null }) {
+function LogTabs({ execLog, judgeLog }: {
+  execLog: import('../api').LogTail | null;
+  judgeLog: import('../api').LogTail | null;
+}) {
+  const [active, setActive] = useState<'exec' | 'judge'>('exec');
+  const log = active === 'exec' ? execLog : judgeLog;
   return (
-    <div className="log-pane">
-      <h4>{title}{log?.truncated ? ' — tail' : ''}</h4>
+    <div className="log-tabs">
+      <div className="log-tabs-nav" role="tablist">
+        <button
+          role="tab"
+          aria-selected={active === 'exec'}
+          className={active === 'exec' ? 'active' : ''}
+          onClick={() => setActive('exec')}
+        >
+          lm-exec
+          {execLog?.exists && <span className="tab-count">{execLog.lines.length}</span>}
+        </button>
+        <button
+          role="tab"
+          aria-selected={active === 'judge'}
+          className={active === 'judge' ? 'active' : ''}
+          onClick={() => setActive('judge')}
+        >
+          lm-judge
+          {judgeLog?.exists && <span className="tab-count">{judgeLog.lines.length}</span>}
+        </button>
+        <div className="log-tabs-meta">
+          {log?.truncated && <span>tail · </span>}
+          {log?.exists && <span className="mono">{fmtBytes(log.sizeBytes)}</span>}
+        </div>
+      </div>
+      <LogPane log={log} />
+    </div>
+  );
+}
+
+function LogPane({ log }: { log: import('../api').LogTail | null }) {
+  return (
+    <div className="log-pane log-pane-tab">
       {!log && <div className="empty">loading…</div>}
       {log && !log.exists && <div className="empty">no log file at {log.path}</div>}
       {log && log.exists && log.lines.length === 0 && <div className="empty">(empty)</div>}
       {log && log.exists && log.lines.length > 0 && <pre>{log.lines.join('\n')}</pre>}
     </div>
   );
+}
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }

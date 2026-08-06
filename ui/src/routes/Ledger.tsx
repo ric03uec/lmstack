@@ -1,31 +1,28 @@
 import { useMemo, useState } from 'react';
-import { api, fmtWall, shortKey } from '../api';
+import { api, fmtExecTime, shortKey } from '../api';
 import { fmtLoaded, useAsync } from '../hooks';
 
 export function Ledger() {
   const { data, error, loading, loadedAt, reload } = useAsync(() => api.ledger({ limit: 500 }), []);
-  const [shape, setShape] = useState('');
   const [outcome, setOutcome] = useState('');
   const [role, setRole] = useState('');
 
-  const shapes = useMemo(() => uniq(data?.map((r) => r.shape).filter((v): v is string => !!v)), [data]);
   const outcomes = useMemo(() => uniq(data?.map((r) => r.outcome).filter((v): v is string => !!v)), [data]);
   const roles = useMemo(() => uniq(data?.map((r) => r.host_role).filter((v): v is string => !!v)), [data]);
 
   const filtered = useMemo(() => {
     if (!data) return null;
     return data.filter((r) => {
-      if (shape && r.shape !== shape) return false;
       if (outcome && r.outcome !== outcome) return false;
       if (role && r.host_role !== role) return false;
       return true;
     });
-  }, [data, shape, outcome, role]);
+  }, [data, outcome, role]);
 
   return (
     <div>
       <div className="section-title">
-        <span>Ledger</span>
+        <span>History of completed tasks</span>
         {filtered && <span className="count">({filtered.length} of {data?.length ?? 0} runs)</span>}
         <div style={{ flex: 1 }} />
         <span className="refresh-info">{fmtLoaded(loadedAt)}</span>
@@ -33,17 +30,12 @@ export function Ledger() {
       </div>
 
       <div className="filters">
-        <label>shape: </label>
-        <select value={shape} onChange={(e) => setShape(e.target.value)}>
-          <option value="">all</option>
-          {shapes.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
         <label>outcome: </label>
         <select value={outcome} onChange={(e) => setOutcome(e.target.value)}>
           <option value="">all</option>
           {outcomes.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
-        <label>role: </label>
+        <label>host: </label>
         <select value={role} onChange={(e) => setRole(e.target.value)}>
           <option value="">all</option>
           {roles.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -51,18 +43,17 @@ export function Ledger() {
       </div>
 
       {error && <div className="error">error: {error}</div>}
-      {filtered && filtered.length === 0 && !error && <div className="empty">No ledger entries.</div>}
+      {filtered && filtered.length === 0 && !error && <div className="empty">No completed tasks yet.</div>}
       {filtered && filtered.length > 0 && (
         <table className="table">
           <thead>
             <tr>
               <th>ended (UTC)</th>
               <th>key</th>
-              <th>shape</th>
               <th>tier</th>
               <th>host</th>
               <th>outcome</th>
-              <th>wall</th>
+              <th>exec time</th>
               <th>judge</th>
               <th>pr</th>
               <th>int.</th>
@@ -73,11 +64,10 @@ export function Ledger() {
               <tr key={`${r.key}-${r.ts}-${i}`} onClick={() => { window.location.hash = `#/forge/${encodeURIComponent(r.key)}`; }}>
                 <td className="mono">{fmtEnded(r.ended ?? r.ts)}</td>
                 <td className="key">{shortKey(r.key)}</td>
-                <td>{r.shape ?? '—'}</td>
-                <td>{r.tier ?? '—'}</td>
+                <td>{fmtTier(r.tier)}</td>
                 <td>{r.host_role}</td>
-                <td>{r.outcome}</td>
-                <td className="mono">{fmtWall(r.wall_min)}</td>
+                <td><OutcomeBadge outcome={r.outcome} /></td>
+                <td className="mono">{fmtExecTime(r.wall_min)}</td>
                 <td className="mono">{r.judge_rounds || '—'}</td>
                 <td className="mono">{r.pr ?? '—'}</td>
                 <td className="mono">{r.interventions ?? 0}</td>
@@ -88,6 +78,26 @@ export function Ledger() {
       )}
     </div>
   );
+}
+
+function OutcomeBadge({ outcome }: { outcome: string }) {
+  const cls = OUTCOME_CLASS[outcome] || 'outcome-neutral';
+  return <span className={`badge ${cls}`}>{outcome}</span>;
+}
+
+const OUTCOME_CLASS: Record<string, string> = {
+  'pr-opened': 'outcome-ok',
+  merged: 'outcome-ok',
+  cleaned: 'outcome-neutral',
+  'no-change': 'outcome-neutral',
+  failed: 'outcome-err',
+  stale: 'outcome-warn',
+};
+
+function fmtTier(t: string | null | undefined): string {
+  if (!t) return '—';
+  const m = /^T\d+$/i.exec(t);
+  return m ? t.toUpperCase() : '—';
 }
 
 function uniq(arr: string[] | undefined): string[] {
